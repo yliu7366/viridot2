@@ -3,7 +3,7 @@ set -e
 
 # Default values
 CONDA_ENV="viridot2_env"
-SAM2_DIR="sam2"
+SAM2_DIR="sam2_repo"
 APP_DIR="."
 
 # Function to display usage
