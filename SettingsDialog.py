@@ -29,7 +29,7 @@ class SettingsDialog(QDialog):
     self.debugCheckBox = QCheckBox("Debug mode")
 
     # Load existing settings
-    self.modelPathInput.setText(self.settings.value("modelpath", "../sam2/checkpoints"))
+    self.modelPathInput.setText(self.settings.value("modelpath", "../sam2_repo/checkpoints"))
     self.debugCheckBox.setChecked(self.settings.value("debugmode", False, type=bool))
 
     # Add buttons
