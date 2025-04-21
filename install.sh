@@ -84,7 +84,7 @@ if conda env list | grep -q "^${CONDA_ENV}\s"; then
     echo "Conda environment '$CONDA_ENV' already exists, updating it."
 else
     echo "Creating Conda environment '$CONDA_ENV' with Python 3.11..."
-    conda create -y -n "$CONDA_ENV" python=3.11 pyside6
+    conda create -y -n "$CONDA_ENV" python=3.11 pyside6 qtimageformats
 fi
 
 # Activate Conda environment

@@ -6,6 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PySide6.QtGui import QPixmap, QImage, QPainter, QPen
 from PySide6.QtCore import Qt, QSize, QPoint
 
+from WellImageGraphicsView import *
 
 class ImageViewerWidget(QWidget):
   def __init__(self, dataset=None, image_list=None, masks_outlines=None):
@@ -35,11 +36,9 @@ class ImageViewerWidget(QWidget):
     self.main_layout.addWidget(self.filename_label)
 
     # Image display area
-    self.image_label = QLabel()
-    self.image_label.setAlignment(Qt.AlignCenter)
-    self.image_label.setMinimumSize(1, 1)  # Allow shrinking
-    #self.image_label.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
-    self.image_label.setScaledContents(False)
+    self.image_view = WellImageGraphicsView()
+    self.image_view.setMinimumSize(1, 1)  # Allow shrinking
+
 
     # Scroll area for grid view
     self.scroll_area = QScrollArea()
@@ -65,7 +64,7 @@ class ImageViewerWidget(QWidget):
     control_layout.addWidget(self.scroll_bar, stretch=1)
 
     # Add widgets to main layout
-    self.main_layout.addWidget(self.image_label, stretch=1)
+    self.main_layout.addWidget(self.image_view, stretch=1)
     self.main_layout.addWidget(self.scroll_area)
     self.main_layout.addLayout(control_layout)
 
@@ -86,22 +85,14 @@ class ImageViewerWidget(QWidget):
       if pixmap:
         # Scale image to fit window while maintaining aspect ratio
         scaled_pixmap = pixmap.scaled(
-          self.image_label.size(),
+          self.image_view.size(),
           Qt.KeepAspectRatio,
           Qt.SmoothTransformation
         )
-        # draw contours
-        if self.masks_outlines:
-          xratio = scaled_pixmap.width() / pixmap.width()
-          yratio = scaled_pixmap.height() / pixmap.height()
-          painter = QPainter(scaled_pixmap)
-          pen = QPen(self.outline_color, self.outline_thickness, self.outline_style)
-          painter.setPen(pen)
-          for contour in self.masks_outlines[self.current_index]['outlines']:
-            points = [QPoint(x * xratio, y * yratio) for x, y in contour.squeeze()]
-            painter.drawPolygon(points)
-          painter.end()
-        self.image_label.setPixmap(scaled_pixmap)
+        # Set image and outlines in CustomGraphicsView
+        outlines = self.masks_outlines[self.current_index]['outlines'] if self.masks_outlines else []
+        self.image_view.set_image(scaled_pixmap, outlines)
+        self.image_view.set_original_size(pixmap.width(), pixmap.height())
         # Update filename label
         filename = os.path.basename(self.image_list[self.current_index])
         self.filename_label.setText(self.dataset_name + ' - ' + filename)
@@ -172,7 +163,7 @@ class ImageViewerWidget(QWidget):
     self.is_grid_view = False
     self.view_btn.setText('Show Grid')
     self.scroll_area.hide()
-    self.image_label.show()
+    self.image_view.show()
     self.scroll_bar.show()
     self.current_index = index
     self.scroll_bar.setValue(index)  # Update scrollbar to match
@@ -181,14 +172,14 @@ class ImageViewerWidget(QWidget):
   def rebuildView(self):
     if self.is_grid_view:
       self.view_btn.setText('Show List')
-      self.image_label.hide()
+      self.image_view.hide()
       self.scroll_bar.hide()
       self.create_grid_view()
       self.scroll_area.show()
     else:
       self.view_btn.setText('Show Grid')
       self.scroll_area.hide()
-      self.image_label.show()
+      self.image_view.show()
       self.scroll_bar.show()
       if self.image_list:
         self.update_image(self.current_index)
@@ -214,7 +205,9 @@ class ImageViewerWidget(QWidget):
     self.masks_outlines = []
 
     for name in self.image_list:
-      self.image_data.append(self.load_image(name))
+      img = self.load_image(name)
+      if img:
+        self.image_data.append(img)
 
     assert len(self.image_list) == len(self.image_data)
 
