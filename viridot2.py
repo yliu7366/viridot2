@@ -8,6 +8,7 @@ install sam2 & pytorch
 import sys
 import glob
 import os
+import pickle
 from natsort import natsorted
 
 if sys.version_info.major == 3 and sys.version_info.minor < 11:
@@ -64,7 +65,7 @@ class MainGUI(QWidget):
 
     self.viewerPanelLayout.addWidget(self.image_view)
 
-    controlPanelButtonSize = QSize(self.controlPanelWidgetWidth, 32)
+    controlPanelButtonSize = QSize(self.controlPanelWidgetWidth, 24)
     self.settingsButton = QPushButton("Settings", self)
     self.settingsButton.setFixedSize(controlPanelButtonSize)
     self.settingsButton.clicked.connect(self.show_settings_dlg)
@@ -72,6 +73,11 @@ class MainGUI(QWidget):
     self.loadDatasetButton = QPushButton("Load Dataset", self)
     self.loadDatasetButton.setFixedSize(controlPanelButtonSize)
     self.loadDatasetButton.clicked.connect(self.load_dataset)
+
+    self.loadSegmentationButton = QPushButton("Load Segmentation", self)
+    self.loadSegmentationButton.setFixedSize(controlPanelButtonSize)
+    self.loadSegmentationButton.clicked.connect(self.load_segmentation)
+    self.loadSegmentationButton.setEnabled(False)
 
     self.createParameterWidgets(controlPanelButtonSize)
     self.enableParameterWidgets(False)
@@ -86,6 +92,7 @@ class MainGUI(QWidget):
 
     self.controlPanelLayout.addWidget(self.settingsButton)
     self.controlPanelLayout.addWidget(self.loadDatasetButton)
+    self.controlPanelLayout.addWidget(self.loadSegmentationButton)
     
     self.addParameterWidgets()
 
@@ -379,9 +386,28 @@ class MainGUI(QWidget):
     self.dataset_emitter.dataset_ready.emit(data_dict)
 
     # enable GUI when a valid dataset is loaded
+    self.loadSegmentationButton.setEnabled(True)
     self.enableParameterWidgets(True)
     self.goButton.setEnabled(True)
 
+  def load_segmentation(self):
+    fileName, _ = QFileDialog.getOpenFileName(self, "Open Segmentation", "", "Pickle Files (*.pkl)")
+    if not fileName:
+      return
+    
+    with open(fileName, 'rb') as file:
+      results = pickle.load(file)
+
+    moList = []
+    for seg in results:
+      mo = {}
+      mo['masks'] = seg['masks']
+      mo['outlines'] = seg['outlines']
+      moList.append(mo)
+
+    self.result_emitter.results_ready.emit(moList)
+    return
+  
   def enableParameterWidgets(self, enable):
     self.modelSelector.setEnabled(enable)
     self.pointsPerSide.setEnabled(enable)

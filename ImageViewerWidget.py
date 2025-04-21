@@ -1,5 +1,5 @@
-import sys
 import os
+import pickle
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QScrollBar, QLabel, QGridLayout, QScrollArea,
                                QApplication, QSizePolicy)
@@ -220,5 +220,23 @@ class ImageViewerWidget(QWidget):
 
   def updateMasksOutlines(self, masks_outlines):
     self.masks_outlines = masks_outlines
+    self.saveSegmentation()
     self.rebuildView()
-    return
+  
+  def saveSegmentation(self):
+    if not self.image_list or not self.masks_outlines:
+      return
+    
+    path_name = os.path.dirname(self.image_list[0])
+
+    results = []
+    for nn, m_o in zip(self.image_list, self.masks_outlines):
+      segmentation = {}
+      segmentation['name'] = os.path.basename(nn)
+      segmentation['masks'] = m_o['masks']
+      segmentation['outlines'] = m_o['outlines']
+      results.append(segmentation)
+
+    output_file = os.path.join(path_name, 'segmentation.pkl')
+    with open(output_file, "wb") as file:
+      pickle.dump(results, file)
