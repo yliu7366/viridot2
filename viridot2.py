@@ -368,7 +368,7 @@ class MainGUI(QWidget):
       return
 
     names = natsorted(glob.glob(os.path.join(folder, '*.CTL')))
-    if len(names) == 0:
+    if not names:
       return
     dataset = os.path.basename(os.path.dirname(names[0]))
     self.image_list = names
