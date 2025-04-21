@@ -6,7 +6,7 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
 from PySide6.QtGui import QPixmap, QImage, QPainter, QPen
 from PySide6.QtCore import Qt, QSize, QPoint
 
-from WellImageGraphicsView import *
+from WellImageGraphicsView import WellImageGraphicsView
 
 class ImageViewerWidget(QWidget):
   def __init__(self, dataset=None, image_list=None, masks_outlines=None):

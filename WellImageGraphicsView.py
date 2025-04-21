@@ -4,13 +4,59 @@ Custom QGraphicsView widget for:
 2. display segmented label outlines
 3. track mouse movement for SAM2 prompt based segmentation
 """
-import sys
-import os
-from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                               QScrollBar, QLabel, QGridLayout, QScrollArea,
-                               QGraphicsView, QGraphicsScene, QApplication, QSizePolicy)
-from PySide6.QtGui import QPixmap, QImage, QPainter, QPen
-from PySide6.QtCore import Qt, QSize, QPoint, QRectF
+from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsItem
+from PySide6.QtGui import QPainter, QPen, QFont, QFontMetrics, QColor, QPainterPath
+from PySide6.QtCore import Qt, QPoint, QRectF
+
+class XORTextItem(QGraphicsItem):
+  def __init__(self, text, pos, font=QFont("Arial", 10), use_xor=True, use_background=False):
+    super().__init__()
+    self.text = text
+    self.pos = pos
+    self.font = font
+    self.use_xor = use_xor
+    self.use_background = use_background
+    self.setPos(pos)
+
+  def boundingRect(self):
+    """Define the bounding rectangle for the text item"""
+    fm = QFontMetrics(self.font)
+    text_width = fm.horizontalAdvance(self.text)
+    text_height = fm.height()
+    return QRectF(0, -text_height / 2, text_width, text_height)
+
+  def paint(self, painter, option, widget=None):
+    """Draw the text in XOR mode or with an outline, optionally with a background"""
+    painter.save()
+    painter.setRenderHint(QPainter.Antialiasing, True)
+    painter.setRenderHint(QPainter.TextAntialiasing, True)
+    painter.setFont(self.font)
+
+    # Get bounding rect for background
+    fm = QFontMetrics(self.font)
+    text_width = fm.horizontalAdvance(self.text)
+    text_height = fm.height()
+    padding = 2 if self.use_background else 0
+    bg_rect = QRectF(-padding, -text_height / 2 - padding, text_width + 2 * padding, text_height + 2 * padding)
+
+    if self.use_background:
+      # Draw semi-transparent black background
+      painter.setBrush(QColor(0, 0, 0, 100))  # Semi-transparent black
+      painter.setPen(Qt.NoPen)
+      painter.drawRect(bg_rect)
+
+    if self.use_xor:
+      # XOR mode with white pen for high contrast
+      # TODO: doesn't work on Rocky linux, always draws black text color
+      painter.setCompositionMode(QPainter.CompositionMode_Xor)
+      painter.setPen(Qt.white)  # White for clear XOR effect
+      painter.drawText(0, 0, self.text)
+    else:
+      # Fallback: White text
+      painter.setPen(Qt.white)
+      painter.drawText(0, 0, self.text)
+
+    painter.restore()
 
 class WellImageGraphicsView(QGraphicsView):
   def __init__(self, parent=None):
@@ -31,6 +77,21 @@ class WellImageGraphicsView(QGraphicsView):
     self.outlines = outlines or []
     self.update_scene()
 
+  def get_bounding_box(self, points):
+    if not points:
+      return QPoint(0, 0)
+    
+    xx = [p.x() for p in points]
+    yy = [p.y() for p in points]
+
+    minX, maxX = min(xx), max(xx)
+    minY, maxY = min(yy), max(yy)
+
+    cx = (minX + maxX) // 2
+    cy = (minY + maxY) // 2
+
+    return QPoint(cx, cy)
+  
   def update_scene(self):
     """Update the QGraphicsScene with the current pixmap and outlines"""
     if not self.current_pixmap:
@@ -47,11 +108,17 @@ class WellImageGraphicsView(QGraphicsView):
     if self.outlines:
       xratio = self.current_pixmap.width() / self.original_pixmap_width
       yratio = self.current_pixmap.height() / self.original_pixmap_height
-      for contour in self.outlines:
+      for idx, contour in enumerate(self.outlines):
         points = [QPoint(x * xratio, y * yratio) for x, y in contour.squeeze()]
         # Create a QGraphicsPolygonItem for the outline
         poly_item = scene.addPolygon(points, QPen(self.outline_color, self.outline_thickness, self.outline_style))
         poly_item.setZValue(1)  # Ensure outlines are above the image
+
+        # draw index at the center of each outline
+        center = self.get_bounding_box(points)
+        text_item = XORTextItem(str(idx), center, QFont("Arial", 10), False, False)
+        text_item.setZValue(2)
+        scene.addItem(text_item)
 
     self.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 
