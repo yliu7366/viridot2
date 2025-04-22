@@ -5,7 +5,7 @@ Custom QGraphicsView widget for:
 3. track mouse movement for SAM2 prompt based segmentation
 """
 from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsItem
-from PySide6.QtGui import QPainter, QPen, QFont, QFontMetrics, QColor, QPainterPath
+from PySide6.QtGui import QPainter, QPen, QFont, QFontMetrics, QColor
 from PySide6.QtCore import Qt, QPoint, QRectF
 
 class XORTextItem(QGraphicsItem):
@@ -116,7 +116,7 @@ class WellImageGraphicsView(QGraphicsView):
 
         # draw index at the center of each outline
         center = self.get_bounding_box(points)
-        text_item = XORTextItem(str(idx), center, QFont("Arial", 10), False, False)
+        text_item = XORTextItem(str(idx+1), center, QFont("Arial", 10), False, False)
         text_item.setZValue(2)
         scene.addItem(text_item)
 

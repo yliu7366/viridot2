@@ -16,7 +16,7 @@ if sys.version_info.major == 3 and sys.version_info.minor < 11:
 
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFileDialog
 from PySide6.QtWidgets import QComboBox, QMessageBox, QLabel, QSpinBox, QDoubleSpinBox
-from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox
+from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget
 from PySide6.QtCore import Qt, QSize, QSettings, QThread, Slot, QObject, Signal
 
 from ImageViewerWidget import ImageViewerWidget
@@ -45,13 +45,13 @@ class MainGUI(QWidget):
     self.dataset_emitter = DatasetEmitter()
 
     self.controlPanelWidgetWidth = 200
-    self.rightPanelWidgetWidth = 200
+    self.labelPanelWidgetWidth   = 200
 
     self.init_ui()
 
   def init_ui(self):
     self.setWindowTitle("Viridot2")
-    self.setGeometry(200, 200, 1200, 600)
+    self.setGeometry(200, 200, 1200, 650)
 
     self.layout = QHBoxLayout()
 
@@ -59,12 +59,14 @@ class MainGUI(QWidget):
     self.viewerPanelLayout = QVBoxLayout()
     self.labelPanelLayout = QVBoxLayout()
 
+    # Image View Widget Panel (Center)
     self.image_view = ImageViewerWidget()
     self.result_emitter.results_ready.connect(self.image_view.updateMasksOutlines)
     self.dataset_emitter.dataset_ready.connect(self.image_view.updateDataset)
 
     self.viewerPanelLayout.addWidget(self.image_view)
 
+    # Control Panel (Left)
     controlPanelButtonSize = QSize(self.controlPanelWidgetWidth, 24)
     self.settingsButton = QPushButton("Settings", self)
     self.settingsButton.setFixedSize(controlPanelButtonSize)
@@ -95,13 +97,21 @@ class MainGUI(QWidget):
     self.controlPanelLayout.addWidget(self.loadSegmentationButton)
     
     self.addParameterWidgets()
-
     self.controlPanelLayout.addWidget(self.goButton)
     self.controlPanelLayout.addWidget(self.progressLabel)
 
-    rightPanelButtonSize = QSize(self.rightPanelWidgetWidth, 32)
+    # Label Widget Panel (right)
+    self.labelListLabel = QLabel("Segmentations")
+
+    self.labelListWidget = QListWidget()
+    self.labelListWidget.setFixedWidth(self.labelPanelWidgetWidth)
+
+    labelPanelButtonSize = QSize(self.labelPanelWidgetWidth, 32)
     self.testButton = QPushButton("Under construction")
-    self.testButton.setFixedSize(rightPanelButtonSize)
+    self.testButton.setFixedSize(labelPanelButtonSize)
+    
+    self.labelPanelLayout.addWidget(self.labelListLabel)
+    self.labelPanelLayout.addWidget(self.labelListWidget)
     self.labelPanelLayout.addWidget(self.testButton)
 
     self.layout.addLayout(self.controlPanelLayout)
