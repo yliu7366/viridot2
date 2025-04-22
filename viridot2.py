@@ -32,6 +32,8 @@ class DatasetEmitter(QObject):
 class MainGUI(QWidget):
   """Main application window"""
 
+  start_computation = Signal()
+
   def __init__(self):
     super().__init__()
 
@@ -47,7 +49,28 @@ class MainGUI(QWidget):
     self.controlPanelWidgetWidth = 200
     self.labelPanelWidgetWidth   = 200
 
+    self.thread = None
+    self.worker = None
+    self.is_worker_running = False
+
     self.init_ui()
+    self.setupWorker()
+
+  def setupWorker(self):
+    # should only be called once
+
+    self.thread = QThread()
+    self.worker = SAM2Worker()
+
+    self.worker.moveToThread(self.thread)
+
+    # connect signals
+    self.start_computation.connect(self.worker.run)
+    self.worker.finished.connect(self.computationDone)
+    self.worker.progress.connect(self.updateProgress)
+    self.worker.error.connect(self.handleError)
+
+    self.thread.start()
 
   def init_ui(self):
     self.setWindowTitle("Viridot2")
@@ -311,43 +334,40 @@ class MainGUI(QWidget):
     return paraDict
 
   def onGoButtonClicked(self):
-    settings = QSettings("IDSS", "Viridot2")
-    cpt_path = settings.value("modelpath", "")
-    debug_mode = settings.value("debugmode", False, type=bool)
+    if not self.image_list:
+      return # no data 
+    
+    if self.is_worker_running:
+      return # prevent multiple runs
+    
+    self.is_worker_running = True
 
     # disable GUI while segmentation is running
     self.goButton.setEnabled(False)
     self.enableParameterWidgets(False)
     self.settingsButton.setEnabled(False)
     self.loadDatasetButton.setEnabled(False)
+    self.loadSegmentationButton.setEnabled(False)
 
     self.progressLabel.setEnabled(True)
     self.progressLabel.setText("0%")
 
     paraDict = self.getExtraParameters()
+    #print(paraDict)
 
-    print(paraDict)
+    settings = QSettings("IDSS", "Viridot2")
+    cpt_path = settings.value("modelpath", "../sam2_repo/checkpoints")
+    debug_mode = settings.value("debugmode", False, type=bool)
 
-    self.thread = QThread()
-    self.worker = SAM2Worker(self.image_list, 
-                             self.sam2_model_keys[self.model_index], 
-                             cpt_path, 
-                             paraDict,
-                             debug_mode)
+    self.worker.setupParameters(
+      self.image_list,
+      self.sam2_model_keys[self.model_index],
+      cpt_path,
+      paraDict,
+      debug_mode
+    )
 
-    self.worker.moveToThread(self.thread)
-
-    # Connect signals and slots
-    self.thread.started.connect(self.worker.run)
-    self.worker.finished.connect(self.computationDone)
-    self.worker.progress.connect(self.updateProgress)
-    self.worker.error.connect(self.handleError)
-    self.worker.finished.connect(self.thread.quit)
-    self.worker.error.connect(self.thread.quit)
-    self.worker.finished.connect(self.worker.deleteLater)
-    self.thread.finished.connect(self.thread.deleteLater)
-
-    self.thread.start()
+    self.start_computation.emit()
     return
 
   @Slot(int)
@@ -364,6 +384,9 @@ class MainGUI(QWidget):
     self.enableParameterWidgets(True)
     self.settingsButton.setEnabled(True)
     self.loadDatasetButton.setEnabled(True)
+    self.loadSegmentationButton.setEnabled(True)
+
+    self.is_worker_running = False
     return
 
   @Slot(str)
@@ -432,6 +455,12 @@ class MainGUI(QWidget):
     self.circularityThresh.setEnabled(enable)
     self.blueChannelThreshFactor.setEnabled(enable)
     self.largestLabelSize.setEnabled(enable)
+
+  def closeEvent(self, event):
+    if self.thread is not None and self.thread.isRunning():
+      self.thread.quit()
+      self.thread.wait()
+    super().closeEvent(event)
 
 # Run the application
 if __name__ == "__main__":

@@ -25,22 +25,60 @@ class SAM2Worker(QObject):
   progress = Signal(int)
   error = Signal(str)
 
-  def __init__(self, image_names, model_type, model_path, para_dict, debug_mode):
+  def __init__(self):
     super().__init__()
+    self.sam2 = None
+    self.model_type = None
+    self.modelChanged = False
+
+  def setupParameters(self, image_names, model_type, model_path, para_dict, debug_mode):
+    self.modelChanged = self.model_type != model_type
+
     self.image_names = image_names
     self.model_type = model_type
     self.model_path = model_path
-    self.para_dict = para_dict
     self.debug_mode = debug_mode
 
+    # AutoMaskGenerator
+    self.create_masked_point_grids = False
+
+    self.points_per_side = para_dict["points_per_side"]
+    self.points_per_batch = para_dict["points_per_batch"]
+    self.crop_n_layers = para_dict["crop_n_layers"]
+    self.crop_scale_factor = 2
+    self.circularity_threshold = para_dict["circularity_thresh"]
+    self.min_label_size = para_dict["min_label_size"]
+    self.pred_iou_thresh = para_dict["pred_iou_thhresh"]
+    self.stability_score_thresh = para_dict["stability_score_thresh"]
+    self.stability_score_offset = para_dict["stability_score_offset"]
+    self.box_nms_thresh = para_dict["box_nms_thresh"]
+
+    # other parameters
+    self.blue_channel_threshold_factor = para_dict["blue_channel_thresh_factor"]
+    self.largest_label_size = para_dict["largest_label_size"]
+
+    # SAM2 model can't be created here because this function is called from the main thread
+    # creating SAM2 model here will have context corruption problem in HPC environments
+
+  def initializeModel(self):
+    try:
+      tStart = time.time()
+      self.SAM2Segmentor(self.model_type, self.model_path)
+      tEnd = time.time()
+      print("SAM2 model created in", (tEnd-tStart), "seconds", flush=True)
+    except Exception as e:
+      self.error.emit(str(e))
+
   def run(self):
-    segmentor = SAM2Segmentor(self.model_type, self.model_path, self.para_dict, self.debug_mode)
+    if not self.sam2 or self.modelChanged:
+      self.initializeModel()
+    
     masks_outlines = []
     total = len(self.image_names)
     for i, name in enumerate(self.image_names):
       tStart = time.time()
       # m, o = self.segmentor.segmentOneImage(name)
-      m, o = segmentor.segmentOneImageAuto(name)
+      m, o = self.segmentOneImageAuto(name)
       tEnd = time.time()
 
       print(os.path.basename(name), "{:.2f}".format(tEnd-tStart), 'seconds')
@@ -56,9 +94,7 @@ class SAM2Worker(QObject):
     self.finished.emit(masks_outlines)
     return
 
-class SAM2Segmentor:
-  def __init__(self, model_type, model_path, para_dict, debug_mode):
-
+  def SAM2Segmentor(self, model_type, model_path):
     osType = sys.platform
 
     if osType == 'darwin':
@@ -89,27 +125,8 @@ class SAM2Segmentor:
                            self.sam2_checkpoint,
                            device=self.device,
                            apply_postprocessing=False)
+    
     self.predictor = SAM2ImagePredictor(self.sam2)
-
-    self.debug_mode = debug_mode
-
-    # AutoMaskGenerator
-    self.create_masked_point_grids = False
-
-    self.points_per_side = para_dict["points_per_side"]
-    self.points_per_batch = para_dict["points_per_batch"]
-    self.crop_n_layers = para_dict["crop_n_layers"]
-    self.crop_scale_factor = 2
-    self.circularity_threshold = para_dict["circularity_thresh"]
-    self.min_label_size = para_dict["min_label_size"]
-    self.pred_iou_thresh = para_dict["pred_iou_thhresh"]
-    self.stability_score_thresh = para_dict["stability_score_thresh"]
-    self.stability_score_offset = para_dict["stability_score_offset"]
-    self.box_nms_thresh = para_dict["box_nms_thresh"]
-
-    # other parameters
-    self.blue_channel_threshold_factor = para_dict["blue_channel_thresh_factor"]
-    self.largest_label_size = para_dict["largest_label_size"]
 
   def getBlueChannel(self, image):
     # ImageJ Brilliang_Blue
@@ -117,7 +134,7 @@ class SAM2Segmentor:
               [0.66023946, 0.5271141, 0.51731443],
               [0.68196464, 0.7583024, 0.4240403]]
 
-    stains, stains_float, wc = color_deconvolution(image, MATRIX)
+    stains, _, _ = color_deconvolution(image, MATRIX)
     blue_ch = 255 - stains[:, :, 0]
     # gaussian filtering
     blue_ch = gaussian(blue_ch, sigma=4, preserve_range=True).astype(np.uint8)
