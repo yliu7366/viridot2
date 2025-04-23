@@ -376,6 +376,7 @@ class MainGUI(QWidget):
 
     for idx, mask in enumerate(result['masks']):
       item_str = " ".join(['#'+str(idx+1),
+                           "Size:",
                            str(mask['area']),
       ])
       self.labelListWidget.addItem(item_str)

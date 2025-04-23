@@ -1,9 +1,10 @@
 import os
 import pickle
+import pandas as pd
+
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-                               QScrollBar, QLabel, QGridLayout, QScrollArea,
-                               QApplication, QSizePolicy)
-from PySide6.QtGui import QPixmap, QImage, QPainter, QPen
+                               QScrollBar, QLabel, QGridLayout, QScrollArea)
+from PySide6.QtGui import QPixmap, QPainter, QPen
 from PySide6.QtCore import Qt, QSize, QPoint, Signal
 
 from WellImageGraphicsView import WellImageGraphicsView
@@ -226,6 +227,7 @@ class ImageViewerWidget(QWidget):
   def updateMasksOutlines(self, masks_outlines):
     self.masks_outlines = masks_outlines
     self.saveSegmentation()
+    self.savePlagueCounts()
     self.rebuildView()
   
   def saveSegmentation(self):
@@ -245,3 +247,34 @@ class ImageViewerWidget(QWidget):
     output_file = os.path.join(path_name, 'segmentation.pkl')
     with open(output_file, "wb") as file:
       pickle.dump(results, file)
+
+  def savePlagueCounts(self):
+    if not self.image_list or not self.masks_outlines:
+      return
+    
+    path_name = os.path.dirname(self.image_list[0])
+
+    labels = []
+    counts = []
+    for nn, m_o in zip(self.image_list, self.masks_outlines):
+      bn = os.path.splitext(os.path.basename(nn))[0]
+      labels.append(bn)
+      counts.append(int(len(m_o['masks'])))
+
+    # pandas pivot table
+    df = pd.DataFrame({'label':labels, 'count':counts})
+
+    df['letter'] = df['label'].str[0]
+    df['number'] = df['label'].str[1:].astype(int)
+
+    pivot_df = df.pivot(index='letter', columns='number', values='count')
+
+    letters = sorted(set(df['letter']))
+    numbers = sorted(set(df['number']))
+    pivot_df = pivot_df.reindex(letters)[numbers]
+    pivot_df = pivot_df.fillna(0).astype(int)
+
+    #print(pivot_df)
+
+    output_file = os.path.join(path_name, 'plague_counts.xls')
+    pivot_df.to_excel(output_file, engine='openpyxl')
