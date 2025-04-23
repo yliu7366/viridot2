@@ -97,7 +97,7 @@ conda activate "$CONDA_ENV" || {
 echo "Installing dependencies..."
 # Install PySide6 and SAM2-related dependencies
 pip install --upgrade pip
-pip install natsort scikit-image || {
+pip install natsort scikit-image pandas openpyxl|| {
     echo "Error: Failed to install core dependencies."
     exit 1
 }
