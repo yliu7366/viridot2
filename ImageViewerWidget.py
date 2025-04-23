@@ -4,11 +4,14 @@ from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QScrollBar, QLabel, QGridLayout, QScrollArea,
                                QApplication, QSizePolicy)
 from PySide6.QtGui import QPixmap, QImage, QPainter, QPen
-from PySide6.QtCore import Qt, QSize, QPoint
+from PySide6.QtCore import Qt, QSize, QPoint, Signal
 
 from WellImageGraphicsView import WellImageGraphicsView
 
 class ImageViewerWidget(QWidget):
+  # Signals
+  currentSeg = Signal(dict) # return current image's segmentation
+
   def __init__(self, dataset=None, image_list=None, masks_outlines=None):
     super().__init__()
     self.image_list = image_list or []
@@ -38,7 +41,6 @@ class ImageViewerWidget(QWidget):
     # Image display area
     self.image_view = WellImageGraphicsView()
     self.image_view.setMinimumSize(1, 1)  # Allow shrinking
-
 
     # Scroll area for grid view
     self.scroll_area = QScrollArea()
@@ -96,6 +98,9 @@ class ImageViewerWidget(QWidget):
         # Update filename label
         filename = os.path.basename(self.image_list[self.current_index])
         self.filename_label.setText(self.dataset_name + ' - ' + filename)
+        # signal main GUI to update the label list widget
+        if outlines:
+          self.currentSeg.emit(self.masks_outlines[self.current_index])
 
   def load_image(self, image_path):
     """Load image from path"""

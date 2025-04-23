@@ -15,7 +15,7 @@ if sys.version_info.major == 3 and sys.version_info.minor < 11:
   from typing_extensions import Self
 
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFileDialog
-from PySide6.QtWidgets import QComboBox, QMessageBox, QLabel, QSpinBox, QDoubleSpinBox
+from PySide6.QtWidgets import QComboBox, QLabel, QSpinBox, QDoubleSpinBox
 from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget
 from PySide6.QtCore import Qt, QSize, QSettings, QThread, Slot, QObject, Signal
 
@@ -31,7 +31,7 @@ class DatasetEmitter(QObject):
 
 class MainGUI(QWidget):
   """Main application window"""
-
+  # signal to run SAM2 segmentation
   start_computation = Signal()
 
   def __init__(self):
@@ -86,6 +86,7 @@ class MainGUI(QWidget):
     self.image_view = ImageViewerWidget()
     self.result_emitter.results_ready.connect(self.image_view.updateMasksOutlines)
     self.dataset_emitter.dataset_ready.connect(self.image_view.updateDataset)
+    self.image_view.currentSeg.connect(self.populateSegmentationList)
 
     self.viewerPanelLayout.addWidget(self.image_view)
 
@@ -370,6 +371,15 @@ class MainGUI(QWidget):
     self.start_computation.emit()
     return
 
+  def populateSegmentationList(self, result):
+    self.labelListWidget.clear()
+
+    for idx, mask in enumerate(result['masks']):
+      item_str = " ".join(['#'+str(idx+1),
+                           str(mask['area']),
+      ])
+      self.labelListWidget.addItem(item_str)
+
   @Slot(int)
   def updateProgress(self, value):
     self.progressLabel.setText(f"{value}%")
@@ -385,6 +395,9 @@ class MainGUI(QWidget):
     self.settingsButton.setEnabled(True)
     self.loadDatasetButton.setEnabled(True)
     self.loadSegmentationButton.setEnabled(True)
+
+    # populate the first image segmentations to the labe list widget
+    self.populateSegmentationList(results[0])
 
     self.is_worker_running = False
     return
@@ -439,6 +452,7 @@ class MainGUI(QWidget):
       moList.append(mo)
 
     self.result_emitter.results_ready.emit(moList)
+    self.populateSegmentationList(moList[0])
     return
   
   def enableParameterWidgets(self, enable):
