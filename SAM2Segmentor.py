@@ -4,10 +4,6 @@ import torch
 import numpy as np
 import time
 
-from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
-from sam2.build_sam import build_sam2
-from sam2.sam2_image_predictor import SAM2ImagePredictor
-
 from PySide6.QtCore import QObject, Signal
 
 from PIL import Image, ImageFilter, ImageDraw
@@ -72,7 +68,7 @@ class SAM2Worker(QObject):
   def run(self):
     if not self.sam2 or self.modelChanged:
       self.initializeModel()
-    
+
     masks_outlines = []
     total = len(self.image_names)
     for i, name in enumerate(self.image_names):
@@ -120,6 +116,9 @@ class SAM2Worker(QObject):
     elif model_type == 'tiny':
       self.sam2_checkpoint = os.path.join(model_path, 'sam2.1_hiera_tiny.pt')
       self.model_cfg = 'configs/sam2.1/sam2.1_hiera_t.yaml'
+
+    from sam2.build_sam import build_sam2
+    from sam2.sam2_image_predictor import SAM2ImagePredictor
 
     self.sam2 = build_sam2(self.model_cfg,
                            self.sam2_checkpoint,
@@ -265,6 +264,8 @@ class SAM2Worker(QObject):
 
     mask_blue = self.getBlueChannel(image)
 
+    from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
+    
     if self.create_masked_point_grids:
       point_grids = self.getPointGridCropUniform(mask_blue)
 

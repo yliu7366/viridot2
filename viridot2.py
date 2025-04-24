@@ -10,6 +10,10 @@ import glob
 import os
 import pickle
 from natsort import natsorted
+import time
+
+print('Viridot2 starting...')
+tStart = time.time()
 
 if sys.version_info.major == 3 and sys.version_info.minor < 11:
   from typing_extensions import Self
@@ -17,11 +21,13 @@ if sys.version_info.major == 3 and sys.version_info.minor < 11:
 from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFileDialog
 from PySide6.QtWidgets import QComboBox, QLabel, QSpinBox, QDoubleSpinBox
 from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget
-from PySide6.QtCore import Qt, QSize, QSettings, QThread, Slot, QObject, Signal
+from PySide6.QtCore import QSize, QSettings, QThread, Slot, QObject, Signal
 
 from ImageViewerWidget import ImageViewerWidget
 from SettingsDialog import SettingsDialog
 from SAM2Segmentor import SAM2Worker
+
+print(f"Dependencies loaded in {time.time()-tStart:.2f}s")
 
 class ResultsEmitter(QObject):
   results_ready = Signal(list)
@@ -96,33 +102,38 @@ class MainGUI(QWidget):
     self.settingsButton.setFixedSize(controlPanelButtonSize)
     self.settingsButton.clicked.connect(self.show_settings_dlg)
 
+    self.singlePlateGroup = QGroupBox("Process Single Plate")
+    self.singlePlateGroup.setFixedWidth(self.controlPanelWidgetWidth)
+    self.singleGroupLayout = QVBoxLayout()
+
     self.loadDatasetButton = QPushButton("Load Dataset", self)
-    self.loadDatasetButton.setFixedSize(controlPanelButtonSize)
     self.loadDatasetButton.clicked.connect(self.load_dataset)
 
     self.loadSegmentationButton = QPushButton("Load Segmentation", self)
-    self.loadSegmentationButton.setFixedSize(controlPanelButtonSize)
     self.loadSegmentationButton.clicked.connect(self.load_segmentation)
     self.loadSegmentationButton.setEnabled(False)
 
-    self.createParameterWidgets(controlPanelButtonSize)
-    self.enableParameterWidgets(False)
-
     self.goButton = QPushButton("GO!", self)
-    self.goButton.setFixedSize(controlPanelButtonSize)
     self.goButton.clicked.connect(self.onGoButtonClicked)
     self.goButton.setEnabled(False) # disabled by default
 
     self.progressLabel = QLabel("0%")
     self.progressLabel.setEnabled(False)
 
+    self.singleGroupLayout.addWidget(self.loadDatasetButton)
+    self.singleGroupLayout.addWidget(self.loadSegmentationButton)
+    self.singleGroupLayout.addWidget(self.goButton)
+    self.singleGroupLayout.addWidget(self.progressLabel)
+
+    self.singlePlateGroup.setLayout(self.singleGroupLayout)
+
+    self.createParameterWidgets(controlPanelButtonSize)
+    self.enableParameterWidgets(False)
+
     self.controlPanelLayout.addWidget(self.settingsButton)
-    self.controlPanelLayout.addWidget(self.loadDatasetButton)
-    self.controlPanelLayout.addWidget(self.loadSegmentationButton)
     
     self.addParameterWidgets()
-    self.controlPanelLayout.addWidget(self.goButton)
-    self.controlPanelLayout.addWidget(self.progressLabel)
+    self.controlPanelLayout.addWidget(self.singlePlateGroup)
 
     # Label Widget Panel (right)
     self.labelListLabel = QLabel("Segmentations")
