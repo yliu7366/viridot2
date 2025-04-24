@@ -18,9 +18,9 @@ tStart = time.time()
 if sys.version_info.major == 3 and sys.version_info.minor < 11:
   from typing_extensions import Self
 
-from PySide6.QtWidgets import QApplication, QWidget, QPushButton, QFileDialog
-from PySide6.QtWidgets import QComboBox, QLabel, QSpinBox, QDoubleSpinBox
-from PySide6.QtWidgets import QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget
+from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QFileDialog,
+                                QComboBox, QLabel, QSpinBox, QDoubleSpinBox,
+                                QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget)
 from PySide6.QtCore import QSize, QSettings, QThread, Slot, QObject, Signal
 
 from ImageViewerWidget import ImageViewerWidget
@@ -159,12 +159,12 @@ class MainGUI(QWidget):
     self.controlPanelLayout.addWidget(self.modelSelector)
 
     r1 = QHBoxLayout()
-    r1Label = QLabel("Points per Side:")
+    r1Label = QLabel("Grid Size:") # Points per Side:
     r1.addWidget(r1Label)
     r1.addWidget(self.pointsPerSide)
 
     r2 = QHBoxLayout()
-    r2Label = QLabel("Points per Batch:")
+    r2Label = QLabel("Batch Size:") # Points per Batch:
     r2.addWidget(r2Label)
     r2.addWidget(self.pointsPerBatch)
 
