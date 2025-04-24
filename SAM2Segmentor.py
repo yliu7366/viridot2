@@ -61,13 +61,15 @@ class SAM2Worker(QObject):
       tStart = time.time()
       self.SAM2Segmentor(self.model_type, self.model_path)
       tEnd = time.time()
-      print("SAM2 model created in", (tEnd-tStart), "seconds", flush=True)
+      print(f"SAM2 model created in {tEnd-tStart:.2f} seconds", flush=True)
     except Exception as e:
       self.error.emit(str(e))
 
   def run(self):
     if not self.sam2 or self.modelChanged:
       self.initializeModel()
+
+    print("Starting plague segmentation", flush=True)
 
     masks_outlines = []
     total = len(self.image_names)
@@ -86,6 +88,8 @@ class SAM2Worker(QObject):
       masks_outlines_dict['masks'] = m
       masks_outlines_dict['outlines'] = o
       masks_outlines.append(masks_outlines_dict)
+
+    print("Plague segmentation done", flush=True)
 
     self.finished.emit(masks_outlines)
     return
@@ -265,7 +269,7 @@ class SAM2Worker(QObject):
     mask_blue = self.getBlueChannel(image)
 
     from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
-    
+
     if self.create_masked_point_grids:
       point_grids = self.getPointGridCropUniform(mask_blue)
 

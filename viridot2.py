@@ -45,7 +45,7 @@ class MainGUI(QWidget):
 
     self.sam2_model_labels = ['SAM2 Tiny', 'SAM2 Base Plus', 'SAM2 Small', 'SAM2 Large']
     self.sam2_model_keys = ['tiny', 'baseplus', 'small', 'large']
-    self.model_index = 0
+    self.model_index = 1 # default model, could be moved to settings
 
     self.image_list = []
 
@@ -80,7 +80,7 @@ class MainGUI(QWidget):
 
   def init_ui(self):
     self.setWindowTitle("Viridot2")
-    self.setGeometry(200, 200, 1200, 650)
+    self.setGeometry(200, 200, 1200, 700)
 
     self.layout = QHBoxLayout()
 
@@ -102,6 +102,9 @@ class MainGUI(QWidget):
     self.settingsButton.setFixedSize(controlPanelButtonSize)
     self.settingsButton.clicked.connect(self.show_settings_dlg)
 
+    self.createParameterWidgets(controlPanelButtonSize)
+
+    ## process single plate
     self.singlePlateGroup = QGroupBox("Process Single Plate")
     self.singlePlateGroup.setFixedWidth(self.controlPanelWidgetWidth)
     self.singleGroupLayout = QVBoxLayout()
@@ -111,29 +114,35 @@ class MainGUI(QWidget):
 
     self.loadSegmentationButton = QPushButton("Load Segmentation", self)
     self.loadSegmentationButton.clicked.connect(self.load_segmentation)
-    self.loadSegmentationButton.setEnabled(False)
+    self.loadSegmentationButton.setEnabled(False) # disabled if no dataset loaded
 
     self.goButton = QPushButton("GO!", self)
     self.goButton.clicked.connect(self.onGoButtonClicked)
-    self.goButton.setEnabled(False) # disabled by default
-
-    self.progressLabel = QLabel("0%")
-    self.progressLabel.setEnabled(False)
+    self.goButton.setEnabled(False) # disabled if no dataset loaded
 
     self.singleGroupLayout.addWidget(self.loadDatasetButton)
     self.singleGroupLayout.addWidget(self.loadSegmentationButton)
     self.singleGroupLayout.addWidget(self.goButton)
-    self.singleGroupLayout.addWidget(self.progressLabel)
-
     self.singlePlateGroup.setLayout(self.singleGroupLayout)
 
-    self.createParameterWidgets(controlPanelButtonSize)
-    self.enableParameterWidgets(False)
+    ## batch processing
+    self.multiPlateGroup = QGroupBox("Process Multiple Plates")
+    self.multiPlateGroup.setFixedWidth(self.controlPanelWidgetWidth)
+    self.multiGroupLayout = QVBoxLayout()
 
-    self.controlPanelLayout.addWidget(self.settingsButton)
-    
-    self.addParameterWidgets()
+    self.batchButton = QPushButton("Launch Batch Processor", self)
+
+    self.multiGroupLayout.addWidget(self.batchButton)
+    self.multiPlateGroup.setLayout(self.multiGroupLayout)
+
+    self.progressLabel = QLabel("0%")
+    self.progressLabel.setEnabled(False)    
+
+    self.controlPanelLayout.addWidget(self.settingsButton)    
     self.controlPanelLayout.addWidget(self.singlePlateGroup)
+    self.controlPanelLayout.addWidget(self.multiPlateGroup)
+    self.addParameterWidgets()
+    self.controlPanelLayout.addWidget(self.progressLabel)
 
     # Label Widget Panel (right)
     self.labelListLabel = QLabel("Segmentations")
@@ -214,6 +223,7 @@ class MainGUI(QWidget):
     r11.addWidget(self.boxNMSThresh)
 
     commonGroupBox = QGroupBox("Common Parameters")
+    commonGroupBox.setFixedWidth(self.controlPanelWidgetWidth)
     commonGroupLayout = QVBoxLayout()
 
     commonGroupLayout.addLayout(r1)
@@ -226,6 +236,7 @@ class MainGUI(QWidget):
     commonGroupBox.setLayout(commonGroupLayout)
 
     uncommonGroupBox = QGroupBox("Uncommon Parameters")
+    uncommonGroupBox.setFixedWidth(self.controlPanelWidgetWidth)
     uncommonGroupLayout = QVBoxLayout()
 
     uncommonGroupLayout.addLayout(r3)
@@ -445,7 +456,6 @@ class MainGUI(QWidget):
 
     # enable GUI when a valid dataset is loaded
     self.loadSegmentationButton.setEnabled(True)
-    self.enableParameterWidgets(True)
     self.goButton.setEnabled(True)
 
   def load_segmentation(self):
