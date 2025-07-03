@@ -69,7 +69,7 @@ class SAM2Worker(QObject):
     if not self.sam2 or self.modelChanged:
       self.initializeModel()
 
-    print("Starting plague segmentation", flush=True)
+    print("Starting plaque segmentation", flush=True)
 
     masks_outlines = []
     total = len(self.image_names)
@@ -89,7 +89,7 @@ class SAM2Worker(QObject):
       masks_outlines_dict['outlines'] = o
       masks_outlines.append(masks_outlines_dict)
 
-    print("Plague segmentation done", flush=True)
+    print("Plaque segmentation done", flush=True)
 
     self.finished.emit(masks_outlines)
     return
@@ -132,7 +132,7 @@ class SAM2Worker(QObject):
     self.predictor = SAM2ImagePredictor(self.sam2)
 
   def getBlueChannel(self, image):
-    # ImageJ Brilliang_Blue
+    # ImageJ Brilliant_Blue
     MATRIX = [[0.31465548, 0.383573, 0.7433543],
               [0.66023946, 0.5271141, 0.51731443],
               [0.68196464, 0.7583024, 0.4240403]]

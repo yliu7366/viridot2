@@ -419,7 +419,7 @@ class MainGUI(QWidget):
     self.loadDatasetButton.setEnabled(True)
     self.loadSegmentationButton.setEnabled(True)
 
-    # populate the first image segmentations to the labe list widget
+    # populate the first image segmentations to the label list widget
     self.populateSegmentationList(results[0])
 
     self.is_worker_running = False

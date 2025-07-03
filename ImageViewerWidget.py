@@ -226,8 +226,11 @@ class ImageViewerWidget(QWidget):
 
   def updateMasksOutlines(self, masks_outlines):
     self.masks_outlines = masks_outlines
+
+    # TODO: saving functions should be done in the main thread after segmentation finished
+    #       saving at here will be triggered when loading segmentations, which would be unnecessary
     self.saveSegmentation()
-    self.savePlagueCounts()
+    self.savePlaqueCounts()
     self.rebuildView()
   
   def saveSegmentation(self):
@@ -248,7 +251,7 @@ class ImageViewerWidget(QWidget):
     with open(output_file, "wb") as file:
       pickle.dump(results, file)
 
-  def savePlagueCounts(self):
+  def savePlaqueCounts(self):
     if not self.image_list or not self.masks_outlines:
       return
     
