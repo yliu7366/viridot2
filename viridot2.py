@@ -340,7 +340,7 @@ class MainGUI(QWidget):
     self.cropNLayers.setValue(1)
     self.boxNMSThresh.setValue(0.7)
     self.circularityThresh.setValue(0.35)
-    self.blueChannelThreshFactor.setValue(0.75)
+    self.blueChannelThreshFactor.setValue(0.5)
 
   def getExtraParameters(self):
     paraDict = {}
