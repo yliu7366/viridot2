@@ -26,6 +26,7 @@ from PySide6.QtCore import QSize, QSettings, QThread, Slot, QObject, Signal
 from ImageViewerWidget import ImageViewerWidget
 from SettingsDialog import SettingsDialog
 from SAM2Segmentor import SAM2Worker
+from BatchProcessorDialog import BatchProcessorDialog
 
 print(f"Dependencies loaded in {time.time()-tStart:.2f}s")
 
@@ -131,7 +132,7 @@ class MainGUI(QWidget):
     self.multiGroupLayout = QVBoxLayout()
 
     self.batchButton = QPushButton("Launch Batch Processor", self)
-
+    self.batchButton.clicked.connect(self.launch_batch_processor)
     self.multiGroupLayout.addWidget(self.batchButton)
     self.multiPlateGroup.setLayout(self.multiGroupLayout)
 
@@ -355,6 +356,10 @@ class MainGUI(QWidget):
     paraDict["largest_label_size"] = self.largestLabelSize.value()
 
     return paraDict
+
+  def launch_batch_processor(self):
+    dialog = BatchProcessorDialog(self)
+    dialog.exec()
 
   def onGoButtonClicked(self):
     if not self.image_list:
