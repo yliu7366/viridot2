@@ -10,7 +10,6 @@ from PIL import Image, ImageFilter, ImageDraw
 
 from skimage.filters import threshold_otsu, gaussian
 from skimage.measure import label, regionprops
-from skimage.color import separate_stains
 
 import cv2
 
