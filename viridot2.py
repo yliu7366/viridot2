@@ -28,6 +28,8 @@ from SettingsDialog import SettingsDialog
 from SAM2Segmentor import SAM2Worker
 from BatchProcessorDialog import BatchProcessorDialog
 
+from utils import savePlaqueCounts, saveSegmentation
+
 print(f"Dependencies loaded in {time.time()-tStart:.2f}s")
 
 class ResultsEmitter(QObject):
@@ -415,6 +417,10 @@ class MainGUI(QWidget):
   @Slot(list)
   def computationDone(self, results):
     self.progressLabel.setEnabled(False)
+
+    saveSegmentation(self.image_list, results)
+    savePlaqueCounts(self.image_list, results)
+    
     self.result_emitter.results_ready.emit(results)
     
     # enable GUI after segmentation is done
