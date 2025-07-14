@@ -8,12 +8,13 @@ from PySide6.QtCore import QObject, Signal
 
 from PIL import Image, ImageFilter, ImageDraw
 
-from histomicstk.preprocessing.color_deconvolution import color_deconvolution
-
 from skimage.filters import threshold_otsu, gaussian
 from skimage.measure import label, regionprops
+from skimage.color import separate_stains
 
 import cv2
+
+from utils import separate_stains_nnls, scale_channel
 
 class SAM2Worker(QObject):
   # Signals
@@ -59,10 +60,11 @@ class SAM2Worker(QObject):
   def initializeModel(self):
     try:
       tStart = time.time()
-      self.SAM2Segmentor(self.model_type, self.model_path)
+      self.createSAM2Segmentor(self.model_type, self.model_path)
       tEnd = time.time()
       print(f"SAM2 model created in {tEnd-tStart:.2f} seconds", flush=True)
     except Exception as e:
+      print(str(e))
       self.error.emit(str(e))
 
   def run(self):
@@ -94,7 +96,7 @@ class SAM2Worker(QObject):
     self.finished.emit(masks_outlines)
     return
 
-  def SAM2Segmentor(self, model_type, model_path):
+  def createSAM2Segmentor(self, model_type, model_path):
     osType = sys.platform
 
     if osType == 'darwin':
@@ -133,12 +135,16 @@ class SAM2Worker(QObject):
 
   def getBlueChannel(self, image):
     # ImageJ Brilliant_Blue
-    MATRIX = [[0.31465548, 0.383573, 0.7433543],
-              [0.66023946, 0.5271141, 0.51731443],
-              [0.68196464, 0.7583024, 0.4240403]]
-
-    stains, _, _ = color_deconvolution(image, MATRIX)
-    blue_ch = 255 - stains[:, :, 0]
+    MATRIX = np.array([
+                      [0.31465548, 0.66023946, 0.68196464],
+                      [0.383573,   0.5271141,  0.7583024],
+                      [0.7433543,  0.51731443, 0.4240403]
+                      ])
+    
+    stains = separate_stains_nnls(image, MATRIX)
+    # stain channel shows white objects on black background
+    blue_ch = scale_channel(stains[:,:,0])
+      
     # gaussian filtering
     blue_ch = gaussian(blue_ch, sigma=4, preserve_range=True).astype(np.uint8)
 
@@ -193,7 +199,7 @@ class SAM2Worker(QObject):
     image          = np.array(image)
     enhanced_image = np.array(enhanced_image)
 
-    mask_blue = self.getBlueChannel(image)
+    mask_blue, _ = self.getBlueChannel(image)
     points, labels = self.getPointPromptsFromMask(mask_blue)
 
     self.predictor.set_image(enhanced_image)
@@ -267,6 +273,13 @@ class SAM2Worker(QObject):
     enhanced_image = np.array(enhanced_image)
 
     mask_blue = self.getBlueChannel(image)
+
+    if self.debug_mode:
+      dirname = os.path.dirname(name)
+      bn = os.path.splitext(os.path.basename(name))[0]
+      outName = os.path.join(dirname, bn+'_blue_mask.png')
+      outImg = Image.fromarray(mask_blue*255, mode='L')
+      outImg.save(outName)
 
     from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 

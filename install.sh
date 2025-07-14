@@ -97,12 +97,8 @@ conda activate "$CONDA_ENV" || {
 echo "Installing dependencies..."
 # Install PySide6 and SAM2-related dependencies
 pip install --upgrade pip
-pip install natsort scikit-image pandas openpyxl|| {
+pip install natsort scikit-image pandas openpyxl opencv-python|| {
     echo "Error: Failed to install core dependencies."
-    exit 1
-}
-pip install histomicstk --find-links https://girder.github.io/large_image_wheels || {
-    echo "Error: Failed to install core dependencies: histomicstk."
     exit 1
 }
 pip install torch torchvision torchaudio || {
