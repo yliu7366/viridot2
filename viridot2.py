@@ -19,7 +19,7 @@ if sys.version_info.major == 3 and sys.version_info.minor < 11:
   from typing_extensions import Self
 
 from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QFileDialog,
-                                QComboBox, QLabel, QSpinBox, QDoubleSpinBox,
+                                QComboBox, QLabel, QSpinBox, QDoubleSpinBox, QMessageBox,
                                 QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget)
 from PySide6.QtCore import QSize, QSettings, QThread, Slot, QObject, Signal
 
@@ -361,8 +361,21 @@ class MainGUI(QWidget):
 
   def launch_batch_processor(self):
     dialog = BatchProcessorDialog(self)
+    dialog.processing_requested.connect(self.startBatchProcessing)
     dialog.exec()
 
+  def startBatchProcessing(self, datasets, mode, root):
+
+    ## temporary place holder code ##
+    print("will start batch processing here")
+
+    print('Root folder:', root)
+    print('Processing mode:', mode)
+    print('Datasets:', datasets)
+    ################################
+    
+    return
+  
   def onGoButtonClicked(self):
     if not self.image_list:
       return # no data 
@@ -438,7 +451,7 @@ class MainGUI(QWidget):
 
   @Slot(str)
   def handleError(self, message):
-    # TODO: display error message
+    QMessageBox.critical(self, "Application Error", message)
     return
 
   def onModelSelectorChanged(self, index):

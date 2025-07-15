@@ -63,7 +63,6 @@ class SAM2Worker(QObject):
       tEnd = time.time()
       print(f"SAM2 model created in {tEnd-tStart:.2f} seconds", flush=True)
     except Exception as e:
-      print(str(e))
       self.error.emit(str(e))
 
   def run(self):
