@@ -91,10 +91,12 @@ class BatchProcessorDialog(QDialog):
           ctl_files = glob.glob(os.path.join(full_path, '*.CTL'))
           num_ctl_files = len(ctl_files)
           
-          tree_item = QTreeWidgetItem([item_name, str(num_ctl_files)])
-          self.folder_preview_tree.addTopLevelItem(tree_item)
-          
-          self.found_subfolders.append(full_path)
+          # skip empty subfolders
+          if num_ctl_files > 0:
+            tree_item = QTreeWidgetItem([item_name, str(num_ctl_files)])
+            self.folder_preview_tree.addTopLevelItem(tree_item)
+            
+            self.found_subfolders.append(full_path)
 
     except OSError as e:
       error_item = QTreeWidgetItem([f"Error reading directory: {e}"])

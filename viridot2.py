@@ -50,6 +50,12 @@ class MainGUI(QWidget):
     self.sam2_model_keys = ['tiny', 'baseplus', 'small', 'large']
     self.model_index = 1 # default model, could be moved to settings
 
+    # batch processing
+    self.datasets = [] # a list of datasets for batch processing
+    self.current_dataset_index = -1
+    self.current_image_list = []
+
+    # single plate processing
     self.image_list = []
 
     self.result_emitter = ResultsEmitter()
@@ -62,10 +68,10 @@ class MainGUI(QWidget):
     self.worker = None
     self.is_worker_running = False
 
-    self.init_ui()
-    self.setupWorker()
+    self.initUI()
+    self.initWorker()
 
-  def setupWorker(self):
+  def initWorker(self):
     # should only be called once
 
     self.thread = QThread()
@@ -81,7 +87,7 @@ class MainGUI(QWidget):
 
     self.thread.start()
 
-  def init_ui(self):
+  def initUI(self):
     self.setWindowTitle("Viridot2")
     self.setGeometry(200, 200, 1200, 700)
 
@@ -103,7 +109,7 @@ class MainGUI(QWidget):
     controlPanelButtonSize = QSize(self.controlPanelWidgetWidth, 24)
     self.settingsButton = QPushButton("Settings", self)
     self.settingsButton.setFixedSize(controlPanelButtonSize)
-    self.settingsButton.clicked.connect(self.show_settings_dlg)
+    self.settingsButton.clicked.connect(self.showSettingsDlg)
 
     self.createParameterWidgets(controlPanelButtonSize)
 
@@ -113,10 +119,10 @@ class MainGUI(QWidget):
     self.singleGroupLayout = QVBoxLayout()
 
     self.loadDatasetButton = QPushButton("Load Dataset", self)
-    self.loadDatasetButton.clicked.connect(self.load_dataset)
+    self.loadDatasetButton.clicked.connect(self.loadDataset)
 
     self.loadSegmentationButton = QPushButton("Load Segmentation", self)
-    self.loadSegmentationButton.clicked.connect(self.load_segmentation)
+    self.loadSegmentationButton.clicked.connect(self.loadSegmentation)
     self.loadSegmentationButton.setEnabled(False) # disabled if no dataset loaded
 
     self.goButton = QPushButton("GO!", self)
@@ -134,7 +140,7 @@ class MainGUI(QWidget):
     self.multiGroupLayout = QVBoxLayout()
 
     self.batchButton = QPushButton("Launch Batch Processor", self)
-    self.batchButton.clicked.connect(self.launch_batch_processor)
+    self.batchButton.clicked.connect(self.launchBatchProcessor)
     self.multiGroupLayout.addWidget(self.batchButton)
     self.multiPlateGroup.setLayout(self.multiGroupLayout)
 
@@ -359,21 +365,78 @@ class MainGUI(QWidget):
 
     return paraDict
 
-  def launch_batch_processor(self):
+  def launchBatchProcessor(self):
     dialog = BatchProcessorDialog(self)
     dialog.processing_requested.connect(self.startBatchProcessing)
     dialog.exec()
 
   def startBatchProcessing(self, datasets, mode, root):
-
-    ## temporary place holder code ##
-    print("will start batch processing here")
+    print("Starting batch processing")
 
     print('Root folder:', root)
     print('Processing mode:', mode)
     print('Datasets:', datasets)
-    ################################
     
+    self.datasets = datasets
+
+    if mode == 'local':
+      self.startLocalBatchProcessing()
+    elif mode == 'slurm':
+      self.startSlurmBatchProcessing()
+
+    return
+  
+  def setupWorker(self, image_list):
+    paraDict = self.getExtraParameters()
+    #print(paraDict)
+
+    settings = QSettings("IDSS", "Viridot2")
+    cpt_path = settings.value("modelpath", "../sam2_repo/checkpoints")
+    debug_mode = settings.value("debugmode", False, type=bool)
+
+    self.worker.setupParameters(
+      image_list,
+      self.sam2_model_keys[self.model_index],
+      cpt_path,
+      paraDict,
+      debug_mode
+    )
+
+    print('Dataset:', os.path.basename(os.path.dirname(image_list[0])))
+    return
+  
+  def setupGUIforComputing(self):
+    # enable/disable GUI controls for computing
+    self.goButton.setEnabled(False)
+    self.enableParameterWidgets(False)
+    self.settingsButton.setEnabled(False)
+    self.loadDatasetButton.setEnabled(False)
+    self.loadSegmentationButton.setEnabled(False)
+    self.batchButton.setEnabled(False)
+
+    self.progressLabel.setEnabled(True)
+    self.progressLabel.setText("0%")
+    return
+  
+  def startLocalBatchProcessing(self):
+    self.current_dataset_index = 0
+    
+    # self.datasets contains only valid subfolders with at least one CTL image
+    self.current_image_list = natsorted(glob.glob(os.path.join(self.datasets[self.current_dataset_index], '*.CTL')))
+    
+    if self.is_worker_running:
+      return # prevent multiple runs
+    
+    self.is_worker_running = True
+
+    self.setupGUIforComputing()
+    self.setupWorker(self.current_image_list)
+
+    self.start_computation.emit()
+    return
+  
+  def startSlurmBatchProcessing(self):
+    # right now do nothing
     return
   
   def onGoButtonClicked(self):
@@ -385,30 +448,8 @@ class MainGUI(QWidget):
     
     self.is_worker_running = True
 
-    # disable GUI while segmentation is running
-    self.goButton.setEnabled(False)
-    self.enableParameterWidgets(False)
-    self.settingsButton.setEnabled(False)
-    self.loadDatasetButton.setEnabled(False)
-    self.loadSegmentationButton.setEnabled(False)
-
-    self.progressLabel.setEnabled(True)
-    self.progressLabel.setText("0%")
-
-    paraDict = self.getExtraParameters()
-    #print(paraDict)
-
-    settings = QSettings("IDSS", "Viridot2")
-    cpt_path = settings.value("modelpath", "../sam2_repo/checkpoints")
-    debug_mode = settings.value("debugmode", False, type=bool)
-
-    self.worker.setupParameters(
-      self.image_list,
-      self.sam2_model_keys[self.model_index],
-      cpt_path,
-      paraDict,
-      debug_mode
-    )
+    self.setupGUIforComputing()
+    self.setupWorker(self.image_list)
 
     self.start_computation.emit()
     return
@@ -427,26 +468,56 @@ class MainGUI(QWidget):
   def updateProgress(self, value):
     self.progressLabel.setText(f"{value}%")
 
-  @Slot(list)
-  def computationDone(self, results):
-    self.progressLabel.setEnabled(False)
-
-    saveSegmentation(self.image_list, results)
-    savePlaqueCounts(self.image_list, results)
-    
-    self.result_emitter.results_ready.emit(results)
-    
+  def setupGUIAfterComputing(self):
     # enable GUI after segmentation is done
     self.goButton.setEnabled(True)
     self.enableParameterWidgets(True)
     self.settingsButton.setEnabled(True)
     self.loadDatasetButton.setEnabled(True)
     self.loadSegmentationButton.setEnabled(True)
+    self.batchButton.setEnabled(True)
 
-    # populate the first image segmentations to the label list widget
-    self.populateSegmentationList(results[0])
+  @Slot(list)
+  def computationDone(self, results):
+    if not self.datasets: # single plate processing
+      self.progressLabel.setEnabled(False)
 
-    self.is_worker_running = False
+      saveSegmentation(self.image_list, results)
+      savePlaqueCounts(self.image_list, results)
+      
+      self.result_emitter.results_ready.emit(results)
+      
+      # populate the first image segmentations to the label list widget
+      self.populateSegmentationList(results[0])
+      self.setupGUIAfterComputing()
+
+      self.is_worker_running = False
+    else:
+      # TODO: batch processing
+      total = len(self.datasets)
+
+      # save results always
+      saveSegmentation(self.current_image_list, results)
+      savePlaqueCounts(self.current_image_list, results)
+
+      # do not emit results to update ImageViewerWidget
+      # do not call populateSegmentationList()
+      # because this is batch processing 
+
+      self.current_dataset_index += 1 # advance the index
+
+      if self.current_dataset_index >= total: # all datasets processed
+        # reset self.datasets
+        self.datasets = []
+        self.setupGUIAfterComputing()
+        self.is_worker_running = False # we are done here, no more emits
+      else:
+        # advance to the next dataset
+        self.current_image_list = natsorted(glob.glob(os.path.join(self.datasets[self.current_dataset_index], '*.CTL')))
+
+        self.setupWorker(self.current_image_list)
+        self.start_computation.emit()
+
     return
 
   @Slot(str)
@@ -458,13 +529,13 @@ class MainGUI(QWidget):
     self.model_index = index
     return
 
-  def show_settings_dlg(self):
+  def showSettingsDlg(self):
     dlg = SettingsDialog(self)
     dlg.exec()
 
-  def load_dataset(self):
+  def loadDataset(self):
     folder = QFileDialog.getExistingDirectory(self, "Select a dataset folder")
-    if len(folder) == 0:
+    if not folder:
       return
 
     names = natsorted(glob.glob(os.path.join(folder, '*.CTL')))
@@ -482,7 +553,7 @@ class MainGUI(QWidget):
     self.loadSegmentationButton.setEnabled(True)
     self.goButton.setEnabled(True)
 
-  def load_segmentation(self):
+  def loadSegmentation(self):
     fileName, _ = QFileDialog.getOpenFileName(self, "Open Segmentation", "", "Pickle Files (*.pkl)")
     if not fileName:
       return
