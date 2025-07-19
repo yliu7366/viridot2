@@ -456,7 +456,7 @@ class MainGUI(QWidget):
 
   def populateSegmentationList(self, result):
     self.labelListWidget.clear()
-
+    
     for idx, mask in enumerate(result['masks']):
       item_str = " ".join(['#'+str(idx+1),
                            "Size:",
@@ -553,6 +553,8 @@ class MainGUI(QWidget):
     # enable GUI when a valid dataset is loaded
     self.loadSegmentationButton.setEnabled(True)
     self.goButton.setEnabled(True)
+
+    self.labelListWidget.clear()
 
   def loadSegmentation(self):
     fileName, _ = QFileDialog.getOpenFileName(self, "Open Segmentation", "", "Pickle Files (*.pkl)")

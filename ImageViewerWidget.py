@@ -229,3 +229,4 @@ class ImageViewerWidget(QWidget):
 
     self.current_index = 0
     self.rebuildView()
+    self.updateImage(self.current_index)
