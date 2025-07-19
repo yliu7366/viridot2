@@ -131,7 +131,7 @@ class SAM2Worker(QObject):
     
     self.predictor = SAM2ImagePredictor(self.sam2)
 
-  def getBlueChannel(self, image):
+  def getBlueChannelColorDecon(self, image):
     # ImageJ Brilliant_Blue
     MATRIX = np.array([
                       [0.31465548, 0.66023946, 0.68196464],
@@ -152,6 +152,60 @@ class SAM2Worker(QObject):
     blue_ch[blue_ch > 0] = 1
     return blue_ch
 
+  def getBlueChannelLab(self, image):
+    lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+    b_channel = lab_image[:, :, 2]
+    threshold = 120 * self.blue_channel_threshold_factor
+    mask = cv2.inRange(b_channel, 0, threshold)
+    kernel = np.ones((5, 5), np.uint8)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_OPEN, kernel)
+    mask = cv2.morphologyEx(mask, cv2.MORPH_CLOSE, kernel)
+    mask[mask > 0] = 1
+    return mask
+  
+  def getBlueChannelLabAdaptive(self, image, k=2.5):
+    lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
+    
+    # --- Step 1: Find a high-confidence "seed" mask ---
+    # Use a stricter threshold to isolate only the most definite blue pixels.
+    b_channel = lab_image[:, :, 2]
+    seed_threshold = 115
+    seed_mask = (b_channel < seed_threshold).astype(np.uint8)
+    
+    # If no seed pixels are found, return a blank mask to avoid errors.
+    if np.sum(seed_mask) == 0:
+        return np.zeros_like(b_channel)
+
+    # --- Step 2: Analyze the color properties of the seed pixels ---
+    # Calculate the mean and std dev for L, a, and b channels within the seed area.
+    l_mean, l_std = cv2.meanStdDev(lab_image[:, :, 0], mask=seed_mask)
+    a_mean, a_std = cv2.meanStdDev(lab_image[:, :, 1], mask=seed_mask)
+    b_mean, b_std = cv2.meanStdDev(lab_image[:, :, 2], mask=seed_mask)
+
+    # --- Step 3: Create a dynamic color range based on the stats ---
+    # The range is defined as mean +/- k * standard deviations.
+    lower_bound = np.array([l_mean[0][0] - k * l_std[0][0], 
+                            a_mean[0][0] - k * a_std[0][0], 
+                            0]) # We keep b's lower bound at 0
+    upper_bound = np.array([255, # Let lightness go to max
+                            255, # Let 'a' go to max
+                            b_mean[0][0] + k * b_std[0][0]])
+    
+    # Ensure bounds are valid (0-255)
+    lower_bound = np.clip(lower_bound, 0, 255)
+    upper_bound = np.clip(upper_bound, 0, 255)
+
+    # --- Step 4: Create the final mask using the adaptive range ---
+    final_mask = cv2.inRange(lab_image, lower_bound, upper_bound)
+
+    # --- Step 5: Final Cleanup ---
+    kernel = np.ones((5, 5), np.uint8)
+    final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel)
+    final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel)
+
+    final_mask[final_mask > 0] = 1
+    return final_mask
+  
   def getPointPromptsFromMask(self, mask):
     labelImg = label(mask)
     regions = regionprops(labelImg)
@@ -197,7 +251,7 @@ class SAM2Worker(QObject):
     image          = np.array(image)
     enhanced_image = np.array(enhanced_image)
 
-    mask_blue, _ = self.getBlueChannel(image)
+    mask_blue, _ = self.getBlueChannelColorDecon(image)
     points, labels = self.getPointPromptsFromMask(mask_blue)
 
     self.predictor.set_image(enhanced_image)
@@ -270,7 +324,9 @@ class SAM2Worker(QObject):
     image          = np.array(image)
     enhanced_image = np.array(enhanced_image)
 
-    mask_blue = self.getBlueChannel(image)
+    #mask_blue = self.getBlueChannelColorDecon(image)
+    #mask_blue = self.getBlueChannelLab(image)
+    mask_blue = self.getBlueChannelLabAdaptive(image, self.blue_channel_threshold_factor)
 
     if self.debug_mode:
       dirname = os.path.dirname(name)
@@ -320,17 +376,19 @@ class SAM2Worker(QObject):
       )
 
     masks = maskGenerator.generate(image)
+    masks = self.filterLargeAnns(masks)
 
     if self.debug_mode:
       print("Masked point grid:", self.create_masked_point_grids)
       print("Number of raw masks", len(masks))
+      self.savePixelMaskOverlay(name, masks, 'masks_raw')
 
     masks = self.filterAnnsByMask(masks, mask_blue)
     masks = sorted(masks, key=(lambda x: x['area']), reverse=True)
 
     if self.debug_mode:
       print("Number of masks after filtering by blue channel mask", len(masks))
-      self.savePixelMaskOverlay(name, masks)
+      self.savePixelMaskOverlay(name, masks, 'masks_filtered')
 
     iouMatrix = self.computeIouMatrix(masks)
     overlapped = self.findMultipleLabelsOnLargeCommonBackground(iouMatrix, 0.01, 1)
@@ -351,20 +409,28 @@ class SAM2Worker(QObject):
     outlines = self.annotations2Outlines(final_masks)
     return final_masks, outlines
 
+  def filterLargeAnns(self, anns):
+    filtered = []
+
+    for ann in anns:
+      if ann['area'] <= self.largest_label_size * self.largest_label_size:
+        filtered.append(ann)
+
+    return filtered
+  
   def filterAnnsByMask(self, anns, mask):
     filtered = []
 
     for ann in anns:
       m = ann['segmentation']
-      if ann['area'] > self.largest_label_size*self.largest_label_size:
-        continue
-
-      m[mask == 0] = False
-      if np.sum(m.astype(np.uint8)) >= self.min_label_size:
-        filtered.append(ann)
+      
+      # the segmentation will be kept if there's at least one corresponding blue mask pixel
+      if np.any(np.logical_and(m, mask)):
+        if ann['area'] >= self.min_label_size:
+          filtered.append(ann)
 
     return filtered
-
+  
   def computeIouMatrix(self, anns):
     """
     the background mask has been removed from the list of input anns
@@ -464,13 +530,13 @@ class SAM2Worker(QObject):
     bn = os.path.splitext(os.path.basename(name))[0]
     image.save(os.path.join(dirname, bn+'_prompts.png'))
 
-  def savePixelMaskOverlay(self, name, anns):
+  def savePixelMaskOverlay(self, name, anns, suffix):
     image = Image.open(name)
     image = image.convert("RGB")
 
     dirname = os.path.dirname(name)
     bn = os.path.splitext(os.path.basename(name))[0]
-    outName = os.path.join(dirname, bn+'_masks.png')
+    outName = os.path.join(dirname, bn+'_'+suffix+'.png')
 
     if not anns:
       image.save(outName)

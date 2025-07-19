@@ -212,7 +212,7 @@ class MainGUI(QWidget):
     r7.addWidget(self.largestLabelSize)
 
     r8 = QHBoxLayout()
-    r8Label = QLabel("Blue Thresh. Factor:")
+    r8Label = QLabel("Blue Factor:")
     r8.addWidget(r8Label)
     r8.addWidget(self.blueChannelThreshFactor)
 
@@ -276,7 +276,7 @@ class MainGUI(QWidget):
 
     # other parameters
     circularity_threshold = 0.35
-    blue_channel_threshold_factor = 0.75
+    blue_channel_threshold_factor = 2.5
     largest_label_size = 150*150
     """
     self.modelSelector = QComboBox()
@@ -302,9 +302,9 @@ class MainGUI(QWidget):
 
     self.pointsPerSide.setRange(19, 152)# may need adjustment later
     if osType == 'darwin':
-      self.pointsPerBatch.setRange(1, 64)
+      self.pointsPerBatch.setRange(16, 128)
     else:
-      self.pointsPerBatch.setRange(1, 1024)
+      self.pointsPerBatch.setRange(16, 2048)
     self.cropNLayers.setRange(0, 5)
     self.minLabelSize.setRange(1, 10)
     self.predIOUThresh.setRange(0.1, 1.0)
@@ -312,7 +312,7 @@ class MainGUI(QWidget):
     self.stabilityScoreOffset.setRange(0.1, 1.0)
     self.boxNMSThresh.setRange(0.1, 1.0)
     self.circularityThresh.setRange(0.1, 1.0)
-    self.blueChannelThreshFactor.setRange(0.1, 2.0)
+    self.blueChannelThreshFactor.setRange(1.0, 3.0)
     self.largestLabelSize.setRange(100, 250)
     
     self.pointsPerSide.setSingleStep(1)
@@ -333,7 +333,7 @@ class MainGUI(QWidget):
     self.circularityThresh.setDecimals(2)
     self.blueChannelThreshFactor.setDecimals(2)
 
-    self.pointsPerSide.setValue(38)
+    self.pointsPerSide.setValue(48)
     if osType == 'darwin':
       self.pointsPerBatch.setValue(64)
     else:
@@ -346,7 +346,7 @@ class MainGUI(QWidget):
     self.cropNLayers.setValue(1)
     self.boxNMSThresh.setValue(0.7)
     self.circularityThresh.setValue(0.35)
-    self.blueChannelThreshFactor.setValue(0.5)
+    self.blueChannelThreshFactor.setValue(2.5)
 
   def getExtraParameters(self):
     paraDict = {}
@@ -541,6 +541,7 @@ class MainGUI(QWidget):
     names = natsorted(glob.glob(os.path.join(folder, '*.CTL')))
     if not names:
       return
+    
     dataset = os.path.basename(os.path.dirname(names[0]))
     self.image_list = names
 

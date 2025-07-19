@@ -27,9 +27,9 @@ class ImageViewerWidget(QWidget):
     self.outline_style = Qt.SolidLine
     self.outline_thickness = 1
     # Initialize UI
-    self.init_ui()
+    self.initUI()
 
-  def init_ui(self):
+  def initUI(self):
     # Main layout
     self.main_layout = QVBoxLayout()
 
@@ -55,7 +55,7 @@ class ImageViewerWidget(QWidget):
 
     # View toggle button
     self.view_btn = QPushButton('Show Grid')
-    self.view_btn.clicked.connect(self.toggle_view)
+    self.view_btn.clicked.connect(self.toggleView)
     control_layout.addWidget(self.view_btn)
 
     # Scroll bar for list view
@@ -63,7 +63,7 @@ class ImageViewerWidget(QWidget):
     self.scroll_bar.setMinimum(0)
     self.scroll_bar.setMaximum(max(0, len(self.image_list) - 1))
     self.scroll_bar.setSingleStep(1)
-    self.scroll_bar.valueChanged.connect(self.update_image)
+    self.scroll_bar.valueChanged.connect(self.updateImage)
     control_layout.addWidget(self.scroll_bar, stretch=1)
 
     # Add widgets to main layout
@@ -75,14 +75,14 @@ class ImageViewerWidget(QWidget):
 
     # Initial setup
     self.scroll_area.hide()
-    if self.image_list:
-      self.update_image(0)
-    else:
-      self.filename_label.setText("No image loaded")
+    self.updateImage(0)
 
-  def update_image(self, value):
+  def updateImage(self, value):
     """Update displayed image in list view"""
-    if not self.is_grid_view and self.image_list:
+    if self.is_grid_view:
+      return
+    
+    if self.image_list:
       self.current_index = value
       pixmap = self.image_data[self.current_index]
       if pixmap:
@@ -100,10 +100,12 @@ class ImageViewerWidget(QWidget):
         filename = os.path.basename(self.image_list[self.current_index])
         self.filename_label.setText(self.dataset_name + ' - ' + filename)
         # signal main GUI to update the label list widget
-        if outlines:
+        if self.masks_outlines:
           self.currentSeg.emit(self.masks_outlines[self.current_index])
+    else:
+      self.filename_label.setText("No image loaded")
 
-  def load_image(self, image_path):
+  def loadImage(self, image_path):
     """Load image from path"""
     try:
       pixmap = QPixmap(image_path)
@@ -114,7 +116,7 @@ class ImageViewerWidget(QWidget):
       print(f"Error loading image: {e}")
       return None
 
-  def create_grid_view(self):
+  def createGridView(self):
     """Create grid view with thumbnails"""
     # Clear existing grid
     for i in reversed(range(self.grid_layout.count())):
@@ -173,26 +175,22 @@ class ImageViewerWidget(QWidget):
     self.scroll_bar.show()
     self.current_index = index
     self.scroll_bar.setValue(index)  # Update scrollbar to match
-    self.update_image(index)
 
   def rebuildView(self):
     if self.is_grid_view:
       self.view_btn.setText('Show List')
       self.image_view.hide()
       self.scroll_bar.hide()
-      self.create_grid_view()
+      self.createGridView()
       self.scroll_area.show()
     else:
       self.view_btn.setText('Show Grid')
       self.scroll_area.hide()
       self.image_view.show()
       self.scroll_bar.show()
-      if self.image_list:
-        self.update_image(self.current_index)
-      else:
-        self.filename_label.setText("No image loaded")
+      self.scroll_bar.setValue(self.current_index)
 
-  def toggle_view(self):
+  def toggleView(self):
     """Switch between list and grid view"""
     self.is_grid_view = not self.is_grid_view
     self.rebuildView()
@@ -201,9 +199,9 @@ class ImageViewerWidget(QWidget):
     """Handle window resize"""
     super().resizeEvent(event)
     if not self.is_grid_view and self.image_list:
-      self.update_image(self.current_index)
+      self.updateImage(self.current_index)
     elif self.is_grid_view and self.image_list:
-      self.create_grid_view()
+      self.createGridView()
 
   def updateDataset(self, data_dict):
     self.image_list = data_dict['names'] or []
@@ -211,7 +209,7 @@ class ImageViewerWidget(QWidget):
     self.masks_outlines = []
 
     for name in self.image_list:
-      img = self.load_image(name)
+      img = self.loadImage(name)
       if img:
         self.image_data.append(img)
 
@@ -219,65 +217,15 @@ class ImageViewerWidget(QWidget):
 
     self.dataset_name = data_dict['dataset'] or ""
     self.scroll_bar.setMaximum(max(0, len(self.image_list) - 1))
-    if self.image_list and not self.is_grid_view:
-      self.update_image(0)
-    elif self.is_grid_view:
-      self.create_grid_view()
+    
+    if self.is_grid_view:
+      self.createGridView()
+    else:
+      self.scroll_bar.setValue(0)
+      self.updateImage(0) # why scroll_bar.setValue doesn't trigger updateImage?
 
   def updateMasksOutlines(self, masks_outlines):
     self.masks_outlines = masks_outlines
 
-    # TODO: saving functions should be done in the main thread after segmentation finished
-    #       saving at here will be triggered when loading segmentations, which would be unnecessary
-    self.saveSegmentation()
-    self.savePlaqueCounts()
+    self.current_index = 0
     self.rebuildView()
-  
-  def saveSegmentation(self):
-    if not self.image_list or not self.masks_outlines:
-      return
-    
-    path_name = os.path.dirname(self.image_list[0])
-
-    results = []
-    for nn, m_o in zip(self.image_list, self.masks_outlines):
-      segmentation = {}
-      segmentation['name'] = os.path.basename(nn)
-      segmentation['masks'] = m_o['masks']
-      segmentation['outlines'] = m_o['outlines']
-      results.append(segmentation)
-
-    output_file = os.path.join(path_name, 'segmentation.pkl')
-    with open(output_file, "wb") as file:
-      pickle.dump(results, file)
-
-  def savePlaqueCounts(self):
-    if not self.image_list or not self.masks_outlines:
-      return
-    
-    path_name = os.path.dirname(self.image_list[0])
-
-    labels = []
-    counts = []
-    for nn, m_o in zip(self.image_list, self.masks_outlines):
-      bn = os.path.splitext(os.path.basename(nn))[0]
-      labels.append(bn)
-      counts.append(int(len(m_o['masks'])))
-
-    # pandas pivot table
-    df = pd.DataFrame({'label':labels, 'count':counts})
-
-    df['letter'] = df['label'].str[0]
-    df['number'] = df['label'].str[1:].astype(int)
-
-    pivot_df = df.pivot(index='letter', columns='number', values='count')
-
-    letters = sorted(set(df['letter']))
-    numbers = sorted(set(df['number']))
-    pivot_df = pivot_df.reindex(letters)[numbers]
-    pivot_df = pivot_df.fillna(0).astype(int)
-
-    #print(pivot_df)
-
-    output_file = os.path.join(path_name, 'plague_counts.xls')
-    pivot_df.to_excel(output_file, engine='openpyxl')
