@@ -36,7 +36,7 @@ class SAM2Worker(QObject):
     self.debug_mode = debug_mode
 
     # AutoMaskGenerator
-    self.create_masked_point_grids = True
+    self.create_masked_point_grids = para_dict["custom_point_grid"]
 
     self.points_per_side = para_dict["points_per_side"]
     self.points_per_batch = para_dict["points_per_batch"]
@@ -203,7 +203,11 @@ class SAM2Worker(QObject):
     final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_OPEN, kernel)
     final_mask = cv2.morphologyEx(final_mask, cv2.MORPH_CLOSE, kernel)
 
+    # remove white background pixels
+    gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
+    final_mask[gray_image > 250] = 0
     final_mask[final_mask > 0] = 1
+
     return final_mask
   
   def getBrightnessMap(self, image):
@@ -398,7 +402,7 @@ class SAM2Worker(QObject):
     brightness_mask = self.getBrightnessMap(image)
     final_masks = self.filterByBrightness(final_masks, brightness_mask)
     """
-    
+
     if self.debug_mode:
       print("Final number of masks", len(final_masks))
 
@@ -438,12 +442,12 @@ class SAM2Worker(QObject):
       m_area_test[mask == 0] = False
 
       blue_pixels = np.sum(m_area_test.astype(np.uint8))
-      min_size = self.min_label_size*self.min_label_size
+      blue_size = 5*5
 
       # the segmentation will be kept if there's at least one corresponding blue mask pixel
       # and the segmentation has enough number of blue pixels
       if np.any(np.logical_and(m, mask)): 
-        if blue_pixels >= min_size:
+        if blue_pixels >= blue_size:
           filtered.append(ann)
 
     return filtered

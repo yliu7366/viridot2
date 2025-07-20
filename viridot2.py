@@ -18,7 +18,7 @@ tStart = time.time()
 if sys.version_info.major == 3 and sys.version_info.minor < 11:
   from typing_extensions import Self
 
-from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QFileDialog,
+from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QFileDialog, QCheckBox,
                                 QComboBox, QLabel, QSpinBox, QDoubleSpinBox, QMessageBox,
                                 QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget)
 from PySide6.QtCore import QSize, QSettings, QThread, Slot, QObject, Signal
@@ -89,7 +89,7 @@ class MainGUI(QWidget):
 
   def initUI(self):
     self.setWindowTitle("Viridot2")
-    self.setGeometry(200, 200, 1200, 700)
+    self.setGeometry(200, 200, 1200, 750)
 
     self.layout = QHBoxLayout()
 
@@ -231,6 +231,11 @@ class MainGUI(QWidget):
     r11.addWidget(r11Label)
     r11.addWidget(self.boxNMSThresh)
 
+    r12 = QHBoxLayout()
+    r12Label = QLabel("Use Custom Point Grid")
+    r12.addWidget(r12Label)
+    r12.addWidget(self.customPointGrid)
+
     commonGroupBox = QGroupBox("Common Parameters")
     commonGroupBox.setFixedWidth(self.controlPanelWidgetWidth)
     commonGroupLayout = QVBoxLayout()
@@ -241,6 +246,7 @@ class MainGUI(QWidget):
     commonGroupLayout.addLayout(r6)
     commonGroupLayout.addLayout(r7)
     commonGroupLayout.addLayout(r8)
+    commonGroupLayout.addLayout(r12)
 
     commonGroupBox.setLayout(commonGroupLayout)
 
@@ -297,6 +303,7 @@ class MainGUI(QWidget):
     self.circularityThresh = QDoubleSpinBox()
     self.blueChannelThreshFactor = QDoubleSpinBox()
     self.largestLabelSize = QSpinBox()
+    self.customPointGrid = QCheckBox("")
 
     osType = sys.platform
 
@@ -347,6 +354,7 @@ class MainGUI(QWidget):
     self.boxNMSThresh.setValue(0.7)
     self.circularityThresh.setValue(0.35)
     self.blueChannelThreshFactor.setValue(2.5)
+    self.customPointGrid.setChecked(True)
 
   def getExtraParameters(self):
     paraDict = {}
@@ -362,7 +370,8 @@ class MainGUI(QWidget):
     paraDict["circularity_thresh"] = self.circularityThresh.value()
     paraDict["blue_channel_thresh_factor"] = self.blueChannelThreshFactor.value()
     paraDict["largest_label_size"] = self.largestLabelSize.value()
-
+    paraDict["custom_point_grid"] = self.customPointGrid.isChecked()
+    
     return paraDict
 
   def launchBatchProcessor(self):
