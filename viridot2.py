@@ -338,7 +338,7 @@ class MainGUI(QWidget):
       self.pointsPerBatch.setValue(64)
     else:
       self.pointsPerBatch.setValue(1024)
-    self.minLabelSize.setValue(5)
+    self.minLabelSize.setValue(3)
     self.largestLabelSize.setValue(150)
     self.predIOUThresh.setValue(0.8)
     self.stabilityScoreThresh.setValue(0.92)

@@ -36,7 +36,7 @@ class SAM2Worker(QObject):
     self.debug_mode = debug_mode
 
     # AutoMaskGenerator
-    self.create_masked_point_grids = False
+    self.create_masked_point_grids = True
 
     self.points_per_side = para_dict["points_per_side"]
     self.points_per_batch = para_dict["points_per_batch"]
@@ -269,50 +269,29 @@ class SAM2Worker(QObject):
 
     return masks, outlines
 
-  def getPointGrid(self, mask):
-    coords = np.linspace(0, 1, self.points_per_side, endpoint=False) + 0.5 / self.points_per_side
+  def getPointGrid(self, mask, factor=1):
+    pps = int(self.points_per_side * factor)
+    if pps > 152:
+      pps = 152
+
+    coords = np.linspace(0, 1, pps, endpoint=False) + 0.5 / pps
     x, y = np.meshgrid(coords, coords)
     points = np.stack([x.ravel(), y.ravel()], axis=-1)
 
     pixel_points = (points * np.array([mask.shape[1], mask.shape[0]])).astype(int)
-    keep = mask[pixel_points[:,1], pixel_points[:,0]] # np array indexing
+
+    dilation_kernel_size = 7
+    kernel = np.ones((dilation_kernel_size, dilation_kernel_size), np.uint8)
+    dilated_mask = cv2.dilate(mask.astype(np.uint8), kernel, iterations=1)
+
+    keep = dilated_mask[pixel_points[:,1], pixel_points[:,0]] # np array indexing
     filtered_points = points[keep.astype(bool)] # make sure keep is of boolean type
 
-    return [filtered_points]
-
-  def getPointGridCropUniform(self, mask):
-    """
-    Generate layer-specific uniform point grids, filtered by a binary mask.
-
-    Args:
-        mask (np.ndarray): Binary mask of shape (H, W).
-
-    Returns:
-        list: List of np.ndarray, each containing normalized points (0 to 1) for a layer.
-    """
-    H, W = mask.shape
-    point_grids = []
-
-    for layer in range(self.crop_n_layers + 1):
-      # Adjust points_per_side based on layer scale (denser for higher layers)
-      scale = self.crop_scale_factor ** layer
-      layer_points_per_side = self.points_per_side * scale  # Increase density for smaller crops
-
-      # Generate uniform grid for the full image
-      coords = np.linspace(0, 1, layer_points_per_side, endpoint=False) + 0.5 / layer_points_per_side
-      x, y = np.meshgrid(coords, coords)
-      points = np.stack([x.ravel(), y.ravel()], axis=-1)
-
-      # Filter points using the mask
-      pixel_points = (points * np.array([W, H])).astype(int)
-      keep = mask[pixel_points[:, 1], pixel_points[:, 0]]
-      filtered_points = points[keep.astype(bool)]
-
-      # Add to point_grids, ensuring non-empty arrays
-      point_grids.append(filtered_points if filtered_points.size > 0 else np.array([]))
-
-    return point_grids
-
+    if filtered_points.size > 0:
+      return [filtered_points]
+    else:
+      return []
+  
   def segmentOneImageAuto(self, name):
     np.random.seed(3)
 
@@ -338,7 +317,9 @@ class SAM2Worker(QObject):
     from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
     if self.create_masked_point_grids:
-      point_grids = self.getPointGridCropUniform(mask_blue)
+      print("Using filtered custom point grids")
+
+      point_grids = self.getPointGrid(mask_blue, 2)
 
       if not point_grids:# empty point grid
         return [], []
@@ -354,7 +335,7 @@ class SAM2Worker(QObject):
         pred_iou_thresh=self.pred_iou_thresh,
         stability_score_thresh=self.stability_score_thresh,
         stability_score_offset=self.stability_score_offset,
-        crop_n_layers=self.crop_n_layers,
+        crop_n_layers=0,
         crop_n_points_downscale_factor=self.crop_scale_factor,
         box_nms_thresh=self.box_nms_thresh,
         min_mask_region_area=self.min_label_size*self.min_label_size,
