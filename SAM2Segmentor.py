@@ -206,6 +206,13 @@ class SAM2Worker(QObject):
     final_mask[final_mask > 0] = 1
     return final_mask
   
+  def getBrightnessMap(self, image):
+    # filter out too bright pixels
+    hsv_image = cv2.cvtColor(image, cv2.COLOR_RGB2HSV)
+    value_channel = hsv_image[:,:,2]
+
+    return value_channel
+
   def getPointPromptsFromMask(self, mask):
     labelImg = label(mask)
     regions = regionprops(labelImg)
@@ -385,11 +392,33 @@ class SAM2Worker(QObject):
         final_masks.append(m)
     
     if self.debug_mode:
+      print("Number of masks after circularity filtering", len(final_masks))
+
+    """
+    brightness_mask = self.getBrightnessMap(image)
+    final_masks = self.filterByBrightness(final_masks, brightness_mask)
+    """
+    
+    if self.debug_mode:
       print("Final number of masks", len(final_masks))
 
     outlines = self.annotations2Outlines(final_masks)
     return final_masks, outlines
 
+  def filterByBrightness(self, anns, b_map):
+    filtered = []
+
+    for ann in anns:
+      m = ann['segmentation']
+
+      foreground_pixels = b_map[m]
+      avg_brightness = foreground_pixels.mean()
+
+      if avg_brightness <= 190: # skip bright non-blue-purple labels
+        filtered.append(ann)
+    
+    return filtered
+  
   def filterLargeAnns(self, anns):
     filtered = []
 
@@ -405,9 +434,16 @@ class SAM2Worker(QObject):
     for ann in anns:
       m = ann['segmentation']
       
+      m_area_test = m.copy()
+      m_area_test[mask == 0] = False
+
+      blue_pixels = np.sum(m_area_test.astype(np.uint8))
+      min_size = self.min_label_size*self.min_label_size
+
       # the segmentation will be kept if there's at least one corresponding blue mask pixel
-      if np.any(np.logical_and(m, mask)):
-        if ann['area'] >= self.min_label_size:
+      # and the segmentation has enough number of blue pixels
+      if np.any(np.logical_and(m, mask)): 
+        if blue_pixels >= min_size:
           filtered.append(ann)
 
     return filtered
