@@ -163,7 +163,7 @@ class SAM2Worker(QObject):
     mask[mask > 0] = 1
     return mask
   
-  def getBlueChannelLabAdaptive(self, image, k=2.5):
+  def getBlueChannelLabAdaptive(self, image, k=2.5, min_seed_pixels=1000):
     lab_image = cv2.cvtColor(image, cv2.COLOR_RGB2LAB)
     
     # --- Step 1: Find a high-confidence "seed" mask ---
@@ -176,27 +176,35 @@ class SAM2Worker(QObject):
     if np.sum(seed_mask) == 0:
         return np.zeros_like(b_channel)
 
-    # --- Step 2: Analyze the color properties of the seed pixels ---
-    # Calculate the mean and std dev for L, a, and b channels within the seed area.
-    l_mean, l_std = cv2.meanStdDev(lab_image[:, :, 0], mask=seed_mask)
-    a_mean, a_std = cv2.meanStdDev(lab_image[:, :, 1], mask=seed_mask)
-    b_mean, b_std = cv2.meanStdDev(lab_image[:, :, 2], mask=seed_mask)
+    seed_pixel_count = np.sum(seed_mask)
+    if self.debug_mode:
+      print("Native blue mask pixel size:", seed_pixel_count)
 
-    # --- Step 3: Create a dynamic color range based on the stats ---
-    # The range is defined as mean +/- k * standard deviations.
-    lower_bound = np.array([l_mean[0][0] - k * l_std[0][0], 
-                            a_mean[0][0] - k * a_std[0][0], 
-                            0]) # We keep b's lower bound at 0
-    upper_bound = np.array([255, # Let lightness go to max
-                            255, # Let 'a' go to max
-                            b_mean[0][0] + k * b_std[0][0]])
-    
-    # Ensure bounds are valid (0-255)
-    lower_bound = np.clip(lower_bound, 0, 255)
-    upper_bound = np.clip(upper_bound, 0, 255)
+    if seed_pixel_count > min_seed_pixels:
+      # --- Step 2: Analyze the color properties of the seed pixels ---
+      # Calculate the mean and std dev for L, a, and b channels within the seed area.
+      l_mean, l_std = cv2.meanStdDev(lab_image[:, :, 0], mask=seed_mask)
+      a_mean, a_std = cv2.meanStdDev(lab_image[:, :, 1], mask=seed_mask)
+      b_mean, b_std = cv2.meanStdDev(lab_image[:, :, 2], mask=seed_mask)
 
-    # --- Step 4: Create the final mask using the adaptive range ---
-    final_mask = cv2.inRange(lab_image, lower_bound, upper_bound)
+      # --- Step 3: Create a dynamic color range based on the stats ---
+      # The range is defined as mean +/- k * standard deviations.
+      lower_bound = np.array([l_mean[0][0] - k * l_std[0][0], 
+                              a_mean[0][0] - k * a_std[0][0], 
+                              0]) # We keep b's lower bound at 0
+      upper_bound = np.array([255, # Let lightness go to max
+                              255, # Let 'a' go to max
+                              b_mean[0][0] + k * b_std[0][0]])
+      
+      # Ensure bounds are valid (0-255)
+      lower_bound = np.clip(lower_bound, 0, 255)
+      upper_bound = np.clip(upper_bound, 0, 255)
+
+      # --- Step 4: Create the final mask using the adaptive range ---
+      final_mask = cv2.inRange(lab_image, lower_bound, upper_bound)
+    else:
+      kernel = np.ones((3, 3), np.uint8)
+      final_mask = cv2.dilate(seed_mask, kernel, iterations=1)
 
     # --- Step 5: Final Cleanup ---
     kernel = np.ones((5, 5), np.uint8)
@@ -205,7 +213,7 @@ class SAM2Worker(QObject):
 
     # remove white background pixels
     gray_image = cv2.cvtColor(image, cv2.COLOR_RGB2GRAY)
-    final_mask[gray_image > 250] = 0
+    final_mask[gray_image > 200] = 0
     final_mask[final_mask > 0] = 1
 
     return final_mask
@@ -328,8 +336,7 @@ class SAM2Worker(QObject):
     from sam2.automatic_mask_generator import SAM2AutomaticMaskGenerator
 
     if self.create_masked_point_grids:
-      print("Using filtered custom point grids")
-
+      
       point_grids = self.getPointGrid(mask_blue, 2)
 
       if not point_grids:# empty point grid
