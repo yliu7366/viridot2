@@ -46,9 +46,9 @@ class MainGUI(QWidget):
   def __init__(self):
     super().__init__()
 
-    self.sam2_model_labels = ['SAM2 Tiny', 'SAM2 Base Plus', 'SAM2 Small', 'SAM2 Large']
-    self.sam2_model_keys = ['tiny', 'baseplus', 'small', 'large']
-    self.model_index = 1 # default model, could be moved to settings
+    self.sam2_model_labels = ['SAM2 Tiny', 'SAM2 Small', 'SAM2 Base Plus', 'SAM2 Large']
+    self.sam2_model_keys = ['tiny', 'small', 'baseplus', 'large']
+    self.model_index = 2 # default model, could be moved to settings
 
     # batch processing
     self.datasets = [] # a list of datasets for batch processing
@@ -400,7 +400,7 @@ class MainGUI(QWidget):
     #print(paraDict)
 
     settings = QSettings("IDSS", "Viridot2")
-    cpt_path = settings.value("modelpath", "../sam2_repo/checkpoints")
+    cpt_path = settings.value("modelpath", "./sam2_repo/checkpoints")
     debug_mode = settings.value("debugmode", False, type=bool)
 
     self.worker.setupParameters(
