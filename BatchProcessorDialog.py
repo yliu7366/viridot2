@@ -7,7 +7,7 @@ from PySide6.QtCore import Signal
 import os
 import glob
 
-from SAM2Segmentor import SAM2Worker
+from utils import findAllImages
 
 class BatchProcessorDialog(QDialog):
   # The signal still emits the list of subfolders to process, the mode, and the root folder.
@@ -33,7 +33,7 @@ class BatchProcessorDialog(QDialog):
     # Add a QTreeWidget for displaying folder contents
     self.folder_preview_tree = QTreeWidget()
     self.folder_preview_tree.setColumnCount(2)
-    self.folder_preview_tree.setHeaderLabels(["Subfolder Name", "Well Images (.CTL) Found"])
+    self.folder_preview_tree.setHeaderLabels(["Subfolder Name", "Well Images Found"])
     self.folder_preview_tree.header().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
     self.folder_preview_tree.header().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
     layout.addWidget(self.folder_preview_tree)
@@ -88,7 +88,7 @@ class BatchProcessorDialog(QDialog):
       for item_name in sorted(os.listdir(root_path)):
         full_path = os.path.join(root_path, item_name)
         if os.path.isdir(full_path):
-          ctl_files = glob.glob(os.path.join(full_path, '*.CTL'))
+          ctl_files = findAllImages(full_path)
           num_ctl_files = len(ctl_files)
           
           # skip empty subfolders

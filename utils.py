@@ -2,6 +2,9 @@ import pickle
 import os
 import pandas as pd
 
+from pathlib import Path
+from natsort import natsorted
+
 from scipy.optimize import nnls
 from skimage.util import img_as_float
 
@@ -58,27 +61,44 @@ def savePlaqueCounts(image_list, masks_outlines):
 
 # color deconvolution
 def separate_stains_nnls(rgb_image, stain_matrix):
-    rgb_float = img_as_float(rgb_image)
-    stain_matrix_transposed = stain_matrix.T
-    reshaped_rgb = rgb_float.reshape(-1, 3)
-    stains = np.zeros_like(reshaped_rgb)
-    for i in range(reshaped_rgb.shape[0]):
-        pixel_od = -np.log(reshaped_rgb[i, :] + 1e-6)
-        pixel_concentrations, _ = nnls(stain_matrix_transposed, pixel_od)
-        stains[i, :] = pixel_concentrations
-    return stains.reshape(rgb_image.shape)
+  rgb_float = img_as_float(rgb_image)
+  stain_matrix_transposed = stain_matrix.T
+  reshaped_rgb = rgb_float.reshape(-1, 3)
+  stains = np.zeros_like(reshaped_rgb)
+  for i in range(reshaped_rgb.shape[0]):
+    pixel_od = -np.log(reshaped_rgb[i, :] + 1e-6)
+    pixel_concentrations, _ = nnls(stain_matrix_transposed, pixel_od)
+    stains[i, :] = pixel_concentrations
+  return stains.reshape(rgb_image.shape)
 
 # the scaling function for color deconvolution results
 def scale_channel(channel_data):
-    """
-    Scales a single 2D channel to the 0-255 range for visualization.
-    """
-    # Ensure there's a range to scale, otherwise return a black image
-    if channel_data.max() == channel_data.min():
-        return np.zeros_like(channel_data, dtype=np.uint8)
+  """
+  Scales a single 2D channel to the 0-255 range for visualization.
+  """
+  # Ensure there's a range to scale, otherwise return a black image
+  if channel_data.max() == channel_data.min():
+    return np.zeros_like(channel_data, dtype=np.uint8)
     
-    # Scale to 0-1 range
-    scaled_01 = (channel_data - channel_data.min()) / (channel_data.max() - channel_data.min())
+  # Scale to 0-1 range
+  scaled_01 = (channel_data - channel_data.min()) / (channel_data.max() - channel_data.min())
     
-    # Scale to 0-255 and convert to 8-bit integer
-    return (scaled_01 * 255).astype(np.uint8)
+  # Scale to 0-255 and convert to 8-bit integer
+  return (scaled_01 * 255).astype(np.uint8)
+
+def findAllImages(folder):
+  folder_path = Path(folder)
+    
+  if not folder_path.is_dir():
+    return []
+
+  supported_extensions = ['.png', '.tif', '.tiff', '.CTL']
+  all_image_paths = []
+
+  # Path.glob is a generator, so we convert it to a list
+  for p in folder_path.glob('*'):
+    if p.suffix.lower() in [ext.lower() for ext in supported_extensions]:
+      all_image_paths.append(str(p)) # Convert path object back to string
+
+  sorted_names = natsorted(all_image_paths)
+  return sorted_names

@@ -28,7 +28,7 @@ from SettingsDialog import SettingsDialog
 from SAM2Segmentor import SAM2Worker
 from BatchProcessorDialog import BatchProcessorDialog
 
-from utils import savePlaqueCounts, saveSegmentation
+from utils import savePlaqueCounts, saveSegmentation, findAllImages
 
 print(f"Dependencies loaded in {time.time()-tStart:.2f}s")
 
@@ -430,9 +430,9 @@ class MainGUI(QWidget):
   def startLocalBatchProcessing(self):
     self.current_dataset_index = 0
     
-    # self.datasets contains only valid subfolders with at least one CTL image
-    self.current_image_list = natsorted(glob.glob(os.path.join(self.datasets[self.current_dataset_index], '*.CTL')))
-    
+    # self.datasets contains only valid subfolders with at least one image
+    self.current_image_list = findAllImages(self.datasets[self.current_dataset_index])
+
     if self.is_worker_running:
       return # prevent multiple runs
     
@@ -522,7 +522,7 @@ class MainGUI(QWidget):
         self.is_worker_running = False # we are done here, no more emits
       else:
         # advance to the next dataset
-        self.current_image_list = natsorted(glob.glob(os.path.join(self.datasets[self.current_dataset_index], '*.CTL')))
+        self.current_image_list = findAllImages(self.datasets[self.current_dataset_index])
 
         self.setupWorker(self.current_image_list)
         self.start_computation.emit()
@@ -547,7 +547,7 @@ class MainGUI(QWidget):
     if not folder:
       return
 
-    names = natsorted(glob.glob(os.path.join(folder, '*.CTL')))
+    names = findAllImages(folder)
     if not names:
       return
     
