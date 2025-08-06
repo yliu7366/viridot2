@@ -328,8 +328,9 @@ class SAM2Worker(QObject):
 
     if self.debug_mode:
       dirname = os.path.dirname(name)
+      os.makedirs(os.path.join(dirname, 'debug'), exist_ok=True)
       bn = os.path.splitext(os.path.basename(name))[0]
-      outName = os.path.join(dirname, bn+'_blue_mask.png')
+      outName = os.path.join(dirname, 'debug', bn+'_blue_mask.png')
       outImg = Image.fromarray(mask_blue*255, mode='L')
       outImg.save(outName)
 
@@ -555,16 +556,18 @@ class SAM2Worker(QObject):
       painter.point(point_list, fill=color)
 
     dirname = os.path.dirname(name)
+    os.makedirs(os.path.join(dirname, 'debug'), exist_ok=True)
     bn = os.path.splitext(os.path.basename(name))[0]
-    image.save(os.path.join(dirname, bn+'_prompts.png'))
+    image.save(os.path.join(dirname, 'debug', bn+'_prompts.png'))
 
   def savePixelMaskOverlay(self, name, anns, suffix):
     image = Image.open(name)
     image = image.convert("RGB")
 
     dirname = os.path.dirname(name)
+    os.makedirs(os.path.join(dirname, 'debug'), exist_ok=True)
     bn = os.path.splitext(os.path.basename(name))[0]
-    outName = os.path.join(dirname, bn+'_'+suffix+'.png')
+    outName = os.path.join(dirname, 'debug', bn+'_'+suffix+'.png')
 
     if not anns:
       image.save(outName)
