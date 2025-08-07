@@ -144,7 +144,7 @@ class SAM2Worker(QObject):
       if self.debug_mode:
         print("Quantizing model to FP4...")
       
-      quantizeModel2FP4(self.sam2)
+      self.quantizeModel2FP4(self.sam2)
 
       if self.debug_mode:
         print(f"Moving quantized model to device: {self.device}")
