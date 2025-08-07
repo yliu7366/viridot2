@@ -51,6 +51,7 @@ class SettingsDialog(QDialog):
     """Save settings when OK is clicked"""
     self.settings.setValue("modelpath", self.modelPathInput.text())
     self.settings.setValue("debugmode", self.debugCheckBox.isChecked())
+    self.settings.setValue("fp4", self.fp4CheckBox.isChecked())
     self.accept()
 
   def browseModelPath(self):
