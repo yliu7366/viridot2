@@ -27,10 +27,12 @@ class SettingsDialog(QDialog):
     self.modelPathLayout.addWidget(self.modelPathButton)
 
     self.debugCheckBox = QCheckBox("Debug mode")
+    self.fp4CheckBox = QCheckBox("FP4 Quantization. Need RTX 40 Series or newer GPU.")
 
     # Load existing settings
-    self.modelPathInput.setText(self.settings.value("modelpath", "../sam2_repo/checkpoints"))
+    self.modelPathInput.setText(self.settings.value("modelpath", "./sam2_repo/checkpoints"))
     self.debugCheckBox.setChecked(self.settings.value("debugmode", False, type=bool))
+    self.fp4CheckBox.setChecked(self.settings.value("fp4", False, type=bool))
 
     # Add buttons
     self.buttons = QDialogButtonBox(
@@ -42,6 +44,7 @@ class SettingsDialog(QDialog):
     # Assemble layout
     self.layout.addLayout(self.modelPathLayout)
     self.layout.addWidget(self.debugCheckBox)
+    self.layout.addWidget(self.fp4CheckBox)
     self.layout.addWidget(self.buttons)
 
   def save_settings(self):

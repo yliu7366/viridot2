@@ -402,13 +402,15 @@ class MainGUI(QWidget):
     settings = QSettings("IDSS", "Viridot2")
     cpt_path = settings.value("modelpath", "./sam2_repo/checkpoints")
     debug_mode = settings.value("debugmode", False, type=bool)
+    fp4 = settings.value("fp4", False, type=bool)
 
     self.worker.setupParameters(
       image_list,
       self.sam2_model_keys[self.model_index],
       cpt_path,
       paraDict,
-      debug_mode
+      debug_mode,
+      fp4
     )
 
     print('Dataset:', os.path.basename(os.path.dirname(image_list[0])))

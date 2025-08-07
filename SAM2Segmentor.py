@@ -1,6 +1,8 @@
 import os
 import sys
 import torch
+import torch.nn as nn
+import bitsandbytes as bnb
 import numpy as np
 import time
 
@@ -27,13 +29,14 @@ class SAM2Worker(QObject):
     self.model_type = None
     self.modelChanged = False
 
-  def setupParameters(self, image_names, model_type, model_path, para_dict, debug_mode):
+  def setupParameters(self, image_names, model_type, model_path, para_dict, debug_mode, fp4):
     self.modelChanged = self.model_type != model_type
 
     self.image_names = image_names
     self.model_type = model_type
     self.model_path = model_path
     self.debug_mode = debug_mode
+    self.fp4 = fp4
 
     # AutoMaskGenerator
     self.create_masked_point_grids = para_dict["custom_point_grid"]
@@ -124,12 +127,55 @@ class SAM2Worker(QObject):
     from sam2.build_sam import build_sam2
     from sam2.sam2_image_predictor import SAM2ImagePredictor
 
-    self.sam2 = build_sam2(self.model_cfg,
-                           self.sam2_checkpoint,
-                           device=self.device,
-                           apply_postprocessing=False)
-    
+    if not self.fp4:
+      self.sam2 = build_sam2(self.model_cfg,
+                            self.sam2_checkpoint,
+                            device=self.device,
+                            apply_postprocessing=False)
+      self.sam2.eval()
+    else:
+      # convert SAM2 model to FP4
+      self.sam2 = build_sam2(self.model_cfg,
+                             self.sam2_checkpoint,
+                             device='cpu',
+                             apply_postprocessing=False)
+      self.sam2.eval()
+
+      if self.debug_mode:
+        print("Quantizing model to FP4...")
+      
+      quantizeModel2FP4(self.sam2)
+
+      if self.debug_mode:
+        print(f"Moving quantized model to device: {self.device}")
+      
+      self.sam2 = self.sam2.to(self.device)
+
+      if self.debug_mode:
+        print("FP4-compatible SAM2 model is ready")
+
     self.predictor = SAM2ImagePredictor(self.sam2)
+
+  def quantizeModel2FP4(self, module):
+    compute_dtype = torch.bfloat16
+    quant_type = 'nf4'
+
+    for name, child in module.named_children():
+      if isinstance(child, nn.Linear):
+        quantized_layer = bnb.nn.Linear4bit(child.in_features,
+                                            child.out_features,
+                                            bias=child.bias is not None,
+                                            compute_dtype=compute_dtype,
+                                            quant_type=quant_type)
+        quantized_layer.weight = bnb.nn.Params4bit(child.weight.data,
+                                                   requires_grad=False,
+                                                   quant_type=quant_type)
+        if child.bias is not None:
+          quantized_layer.bias = child.bias
+
+        setattr(module, name, quantized_layer)
+      else:
+        self.quantizeModel2FP4(child)
 
   def getBlueChannelColorDecon(self, image):
     # ImageJ Brilliant_Blue

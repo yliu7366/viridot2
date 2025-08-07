@@ -97,11 +97,11 @@ conda activate "$CONDA_ENV" || {
 echo "Installing dependencies..."
 # Install PySide6 and SAM2-related dependencies
 pip install --upgrade pip
-pip install natsort scikit-image pandas openpyxl opencv-python|| {
+pip install natsort scikit-image pandas openpyxl opencv-python || {
     echo "Error: Failed to install core dependencies."
     exit 1
 }
-pip install torch torchvision torchaudio || {
+pip install torch torchvision torchaudio bitsandbytes || {
     echo "Error: Failed to install core dependencies: pytorch."
     exit 1
 }

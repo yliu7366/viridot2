@@ -64,7 +64,8 @@ try {
 
     Write-Host "Installing dependencies using pip..." -ForegroundColor Cyan
     & $pythonPath -m pip install --upgrade pip
-    & $pythonPath -m pip install natsort scikit-image pandas openpyxl opencv-python torch torchvision torchaudio
+    & $pythonPath -m pip install torch torchvision --index-url https://download.pytorch.org/whl/cu126
+    & $pythonPath -m pip install natsort scikit-image pandas openpyxl opencv-python bitsandbytes
     if ($LASTEXITCODE -ne 0) { throw "Failed to install one or more pip packages." }
 
     $requirementsFile = Join-Path $AppDir "requirements.txt"
