@@ -584,6 +584,9 @@ class MainGUI(QWidget):
 
     self.result_emitter.results_ready.emit(moList)
     self.populateSegmentationList(moList[0])
+
+    QMessageBox.information(self, "Success", f"Successfully loaded {len(moList)} segmentation results from\n{fileName}")
+    
     return
   
   def enableParameterWidgets(self, enable):
