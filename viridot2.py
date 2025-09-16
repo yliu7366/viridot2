@@ -57,6 +57,7 @@ class MainGUI(QWidget):
 
     # single plate processing
     self.image_list = []
+    self.segmentationExists = False # flag for if segmentations exist by loading or from SAM
 
     self.result_emitter = ResultsEmitter()
     self.dataset_emitter = DatasetEmitter()
@@ -102,7 +103,7 @@ class MainGUI(QWidget):
     self.result_emitter.results_ready.connect(self.image_view.updateMasksOutlines)
     self.dataset_emitter.dataset_ready.connect(self.image_view.updateDataset)
     self.image_view.currentSeg.connect(self.populateSegmentationList)
-
+    self.image_view.isGridView.connect(self.updateControlsForGridView)
     self.viewerPanelLayout.addWidget(self.image_view)
 
     # Control Panel (Left)
@@ -160,18 +161,29 @@ class MainGUI(QWidget):
     self.labelListWidget.setFixedWidth(self.labelPanelWidgetWidth)
 
     labelPanelButtonSize = QSize(self.labelPanelWidgetWidth, 32)
-    self.testButton = QPushButton("Under construction")
-    self.testButton.setFixedSize(labelPanelButtonSize)
+    self.clickToSegment = QCheckBox("Click to Segment")
+    self.clickToSegment.stateChanged.connect(self.image_view.setSegmentationMode)
+    self.clickToSegment.setFixedSize(labelPanelButtonSize)
+    self.clickToSegment.setEnabled(False) # disabled till SAM auto segmentation has done.
     
     self.labelPanelLayout.addWidget(self.labelListLabel)
     self.labelPanelLayout.addWidget(self.labelListWidget)
-    self.labelPanelLayout.addWidget(self.testButton)
+    self.labelPanelLayout.addWidget(self.clickToSegment)
 
     self.layout.addLayout(self.controlPanelLayout)
     self.layout.addLayout(self.viewerPanelLayout)
     self.layout.addLayout(self.labelPanelLayout)
 
     self.setLayout(self.layout)
+
+  def updateControlsForGridView(self, is_grid_view: bool):
+    # when showing a grid, disable the click to segment mode
+    if is_grid_view:
+      self.clickToSegment.setEnabled(False)
+    # TODO: enable clickToSegment only if segmentation exists 
+    # by either loaded or producec by SAM
+    elif self.segmentationExists:
+      self.clickToSegment.setEnabled(True)
 
   def addParameterWidgets(self):
     self.controlPanelLayout.addWidget(self.modelSelector)
@@ -424,6 +436,7 @@ class MainGUI(QWidget):
     self.loadDatasetButton.setEnabled(False)
     self.loadSegmentationButton.setEnabled(False)
     self.batchButton.setEnabled(False)
+    self.clickToSegment.setEnabled(False)
 
     self.progressLabel.setEnabled(True)
     self.progressLabel.setText("0%")
@@ -487,6 +500,8 @@ class MainGUI(QWidget):
     self.loadDatasetButton.setEnabled(True)
     self.loadSegmentationButton.setEnabled(True)
     self.batchButton.setEnabled(True)
+    if not self.image_view.isGridViewActive(): # enable the checkbox only if list view is active
+      self.clickToSegment.setEnabled(True)
 
   @Slot(list)
   def computationDone(self, results):
@@ -565,6 +580,12 @@ class MainGUI(QWidget):
     self.loadSegmentationButton.setEnabled(True)
     self.goButton.setEnabled(True)
 
+    # reset clickToSegment related controls and states after loading a new dataset
+    self.clickToSegment.setChecked(False)
+    self.clickToSegment.setEnabled(False)
+    self.image_view.setSegmentationMode(False)
+    self.segmentationExists = False
+
     self.labelListWidget.clear()
 
   def loadSegmentation(self):
@@ -585,8 +606,13 @@ class MainGUI(QWidget):
     self.result_emitter.results_ready.emit(moList)
     self.populateSegmentationList(moList[0])
 
+    # enable clickToSegment
+    if not self.image_view.isGridViewActive():
+      self.clickToSegment.setEnabled(True)
+    self.segmentationExists = True
+
     QMessageBox.information(self, "Success", f"Successfully loaded {len(moList)} segmentation results from\n{fileName}")
-    
+
     return
   
   def enableParameterWidgets(self, enable):

@@ -5,13 +5,14 @@ import pandas as pd
 from PySide6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                                QScrollBar, QLabel, QGridLayout, QScrollArea)
 from PySide6.QtGui import QPixmap, QPainter, QPen
-from PySide6.QtCore import Qt, QSize, QPoint, Signal
+from PySide6.QtCore import Qt, QSize, QPoint, Signal, Slot
 
 from WellImageGraphicsView import WellImageGraphicsView
 
 class ImageViewerWidget(QWidget):
   # Signals
-  currentSeg = Signal(dict) # return current image's segmentation
+  currentSeg = Signal(dict) # emit current image's segmentation for MainUI to update the segmentation list
+  isGridView = Signal(bool) # emit GridView status for MainUI to update UI correspondingly
 
   def __init__(self, dataset=None, image_list=None, masks_outlines=None):
     super().__init__()
@@ -77,6 +78,9 @@ class ImageViewerWidget(QWidget):
     self.scroll_area.hide()
     self.updateImage(0)
 
+  def isGridViewActive(self) -> bool:
+    return self.is_grid_view
+  
   def updateImage(self, value):
     """Update displayed image in list view"""
     if self.is_grid_view:
@@ -94,8 +98,8 @@ class ImageViewerWidget(QWidget):
         )
         # Set image and outlines in CustomGraphicsView
         outlines = self.masks_outlines[self.current_index]['outlines'] if self.masks_outlines else []
-        self.image_view.set_image(scaled_pixmap, outlines)
-        self.image_view.set_original_size(pixmap.width(), pixmap.height())
+        self.image_view.setImage(scaled_pixmap, outlines)
+        self.image_view.setOriginalSize(pixmap.width(), pixmap.height())
         # Update filename label
         filename = os.path.basename(self.image_list[self.current_index])
         self.filename_label.setText(self.dataset_name + ' - ' + filename)
@@ -193,6 +197,7 @@ class ImageViewerWidget(QWidget):
   def toggleView(self):
     """Switch between list and grid view"""
     self.is_grid_view = not self.is_grid_view
+    self.isGridView.emit(self.is_grid_view)
     self.rebuildView()
 
   def resizeEvent(self, event):
@@ -203,6 +208,7 @@ class ImageViewerWidget(QWidget):
     elif self.is_grid_view and self.image_list:
       self.createGridView()
 
+  @Slot(dict)
   def updateDataset(self, data_dict):
     self.image_list = data_dict['names'] or []
     self.image_data = []
@@ -224,9 +230,16 @@ class ImageViewerWidget(QWidget):
       self.scroll_bar.setValue(0)
       self.updateImage(0) # why scroll_bar.setValue doesn't trigger updateImage?
 
+  @Slot(list)
   def updateMasksOutlines(self, masks_outlines):
     self.masks_outlines = masks_outlines
 
     self.current_index = 0
     self.rebuildView()
     self.updateImage(self.current_index)
+
+  @Slot(bool)
+  def setSegmentationMode(self, enabled: bool):
+    # pass-through slot
+    self.image_view.setSegmentationMode(enabled)
+    return

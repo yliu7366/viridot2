@@ -6,7 +6,7 @@ Custom QGraphicsView widget for:
 """
 from PySide6.QtWidgets import QGraphicsView, QGraphicsScene, QGraphicsItem
 from PySide6.QtGui import QPainter, QPen, QFont, QFontMetrics, QColor
-from PySide6.QtCore import Qt, QPoint, QRectF
+from PySide6.QtCore import Qt, QPoint, QRectF, Slot, Signal
 
 class XORTextItem(QGraphicsItem):
   def __init__(self, text, pos, font=QFont("Arial", 10), use_xor=True, use_background=False):
@@ -59,6 +59,9 @@ class XORTextItem(QGraphicsItem):
     painter.restore()
 
 class WellImageGraphicsView(QGraphicsView):
+  # signal to trigger a click based segmentation
+  requestSegmentation = Signal(QPoint)
+
   def __init__(self, parent=None):
     super().__init__(parent)
     self.setScene(QGraphicsScene(self))
@@ -70,14 +73,23 @@ class WellImageGraphicsView(QGraphicsView):
     self.outline_thickness = 1
     self.outline_style = Qt.SolidLine
     self.mouse_pos = None
+    self.clickToSegment = False
 
-  def set_image(self, pixmap, outlines=None):
+  @Slot(bool)
+  def setSegmentationMode(self, enabled: bool):
+    self.clickToSegment = enabled
+    if self.clickToSegment:
+      self.setCursor(Qt.CursorShape.CrossCursor)
+    else:
+      self.setCursor(Qt.CursorShape.ArrowCursor)
+
+  def setImage(self, pixmap, outlines=None):
     """Set the image and outlines to display"""
     self.current_pixmap = pixmap
     self.outlines = outlines or []
-    self.update_scene()
+    self.updateScene()
 
-  def get_bounding_box(self, points):
+  def getBoundingBox(self, points):
     if not points:
       return QPoint(0, 0)
     
@@ -92,7 +104,7 @@ class WellImageGraphicsView(QGraphicsView):
 
     return QPoint(cx, cy)
   
-  def update_scene(self):
+  def updateScene(self):
     """Update the QGraphicsScene with the current pixmap and outlines"""
     if not self.current_pixmap:
       return
@@ -115,14 +127,14 @@ class WellImageGraphicsView(QGraphicsView):
         poly_item.setZValue(1)  # Ensure outlines are above the image
 
         # draw index at the center of each outline
-        center = self.get_bounding_box(points)
+        center = self.getBoundingBox(points)
         text_item = XORTextItem(str(idx+1), center, QFont("Arial", 10), False, False)
         text_item.setZValue(2)
         scene.addItem(text_item)
 
     self.fitInView(scene.sceneRect(), Qt.KeepAspectRatio)
 
-  def set_original_size(self, width, height):
+  def setOriginalSize(self, width, height):
     """Store original pixmap dimensions for correct outline scaling"""
     self.original_pixmap_width = width
     self.original_pixmap_height = height
@@ -139,10 +151,11 @@ class WellImageGraphicsView(QGraphicsView):
   def mousePressEvent(self, event):
     """Handle mouse clicks for SAM2 prompts"""
     if event.button() == Qt.LeftButton:
-      scene_pos = self.mapToScene(event.pos())
-      # Store or process click for SAM2 (e.g., as a prompt point)
-      #print(f"Mouse clicked at: ({scene_pos.x():.2f}, {scene_pos.y():.2f})")
-      # Add your SAM2 prompt logic here
+      if self.clickToSegment:
+        scene_pos = self.mapToScene(event.pos())
+        self.requestSegmentation.emit(scene_pos.toPoint())
+        print(f"Mouse clicked at: ({event.pos()})")
+        print(f"Mouse clicked at: ({scene_pos.x():.2f}, {scene_pos.y():.2f})")
     super().mousePressEvent(event)
 
   def resizeEvent(self, event):
