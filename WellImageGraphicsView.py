@@ -60,20 +60,26 @@ class XORTextItem(QGraphicsItem):
 
 class WellImageGraphicsView(QGraphicsView):
   # signal to trigger a click based segmentation
-  requestSegmentation = Signal(QPoint)
+  requestSegmentation = Signal(float, float)
 
   def __init__(self, parent=None):
     super().__init__(parent)
     self.setScene(QGraphicsScene(self))
     self.setAlignment(Qt.AlignCenter)
     self.setMouseTracking(True)  # Enable mouse tracking
+
     self.current_pixmap = None
+    self.pixmap_item = None
+
     self.outlines = []
     self.outline_color = Qt.yellow
     self.outline_thickness = 1
     self.outline_style = Qt.SolidLine
     self.mouse_pos = None
     self.clickToSegment = False
+
+    self.original_pixmap_width = 1
+    self.original_pixmap_height = 1
 
   @Slot(bool)
   def setSegmentationMode(self, enabled: bool):
@@ -107,13 +113,15 @@ class WellImageGraphicsView(QGraphicsView):
   def updateScene(self):
     """Update the QGraphicsScene with the current pixmap and outlines"""
     if not self.current_pixmap:
+      self.scene().clear()
+      self.pixmap_item = None
       return
 
     scene = self.scene()
     scene.clear()
 
     # Add pixmap to scene
-    pixmap_item = scene.addPixmap(self.current_pixmap)
+    self.pixmap_item = scene.addPixmap(self.current_pixmap)
     scene.setSceneRect(QRectF(self.current_pixmap.rect()))
 
     # Draw outlines
@@ -136,30 +144,58 @@ class WellImageGraphicsView(QGraphicsView):
 
   def setOriginalSize(self, width, height):
     """Store original pixmap dimensions for correct outline scaling"""
-    self.original_pixmap_width = width
-    self.original_pixmap_height = height
+    self.original_pixmap_width = width if width > 0 else 1
+    self.original_pixmap_height = height if height > 0 else 1
 
   def mouseMoveEvent(self, event):
     """Track mouse movement for SAM2 prompts"""
-    scene_pos = self.mapToScene(event.pos())
-    self.mouse_pos = (scene_pos.x(), scene_pos.y())
+    #scene_pos = self.mapToScene(event.pos())
+    #self.mouse_pos = (scene_pos.x(), scene_pos.y())
     # Optionally emit signal or store for SAM2
     # Example: print coordinates (replace with SAM2 integration)
     #print(f"Mouse position: ({scene_pos.x():.2f}, {scene_pos.y():.2f})")
     super().mouseMoveEvent(event)
 
   def mousePressEvent(self, event):
-    """Handle mouse clicks for SAM2 prompts"""
-    if event.button() == Qt.LeftButton:
-      if self.clickToSegment:
-        scene_pos = self.mapToScene(event.pos())
-        self.requestSegmentation.emit(scene_pos.toPoint())
-        print(f"Mouse clicked at: ({event.pos()})")
-        print(f"Mouse clicked at: ({scene_pos.x():.2f}, {scene_pos.y():.2f})")
     super().mousePressEvent(event)
+
+    """Handle mouse clicks for SAM2 prompts"""
+    if event.button() == Qt.LeftButton and self.clickToSegment:
+      if not self.pixmap_item:
+        return
+      
+      scene_pos = self.mapToScene(event.pos())
+
+      if self.pixmap_item.sceneBoundingRect().contains(scene_pos):
+        
+        # The pixmap item's top-left might not be at (0,0) if you move it,
+        # so we transform the scene position to be relative to the item's origin.
+        item_pos = self.pixmap_item.mapFromScene(scene_pos)
+
+        pixmap = self.pixmap_item.pixmap()
+        pixmap_width = pixmap.width()
+        pixmap_height = pixmap.height()
+
+        # Avoid division by zero
+        if pixmap_width == 0 or pixmap_height == 0:
+            return
+
+        # Calculate normalized coordinates
+        normalized_x = item_pos.x() / pixmap_width
+        normalized_y = item_pos.y() / pixmap_height
+
+        # The values should now be within [0.0, 1.0].
+        # We can add a final clamp for safety.
+        normalized_x = max(0.0, min(normalized_x, 1.0))
+        normalized_y = max(0.0, min(normalized_y, 1.0))
+
+        print(f"Normalized click: ({normalized_x:.3f}, {normalized_y:.3f})")
+
+        # Emit the new signal with the normalized coordinates
+        self.requestSegmentation.emit(normalized_x, normalized_y)
 
   def resizeEvent(self, event):
     """Adjust the view when resized"""
-    if self.current_pixmap:
+    if self.pixmap_item:
       self.fitInView(self.scene().sceneRect(), Qt.KeepAspectRatio)
     super().resizeEvent(event)
