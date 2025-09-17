@@ -13,6 +13,7 @@ class ImageViewerWidget(QWidget):
   # Signals
   currentSeg = Signal(dict) # emit current image's segmentation for MainUI to update the segmentation list
   isGridView = Signal(bool) # emit GridView status for MainUI to update UI correspondingly
+  requestSegmentation = Signal(float, float, str) # emit X, Y and image file name
 
   def __init__(self, dataset=None, image_list=None, masks_outlines=None):
     super().__init__()
@@ -43,6 +44,7 @@ class ImageViewerWidget(QWidget):
     # Image display area
     self.image_view = WellImageGraphicsView()
     self.image_view.setMinimumSize(1, 1)  # Allow shrinking
+    self.image_view.requestSegmentation.connect(self.onRequestSegmentation)
 
     # Scroll area for grid view
     self.scroll_area = QScrollArea()
@@ -76,19 +78,19 @@ class ImageViewerWidget(QWidget):
 
     # Initial setup
     self.scroll_area.hide()
-    self.updateImage(0)
+    self.updateImage(0) # 0 is the default value
 
   def isGridViewActive(self) -> bool:
     return self.is_grid_view
   
-  def updateImage(self, value):
+  def updateImage(self, index):
     """Update displayed image in list view"""
     if self.is_grid_view:
       return
     
     if self.image_list:
-      self.current_index = value
-      pixmap = self.image_data[self.current_index]
+      self.current_index = index # remember the current index as the scroll bar controls which one to display
+      pixmap = self.image_data[index]
       if pixmap:
         # Scale image to fit window while maintaining aspect ratio
         scaled_pixmap = pixmap.scaled(
@@ -97,15 +99,15 @@ class ImageViewerWidget(QWidget):
           Qt.SmoothTransformation
         )
         # Set image and outlines in CustomGraphicsView
-        outlines = self.masks_outlines[self.current_index]['outlines'] if self.masks_outlines else []
+        outlines = self.masks_outlines[index]['outlines'] if self.masks_outlines else []
         self.image_view.setImage(scaled_pixmap, outlines)
         self.image_view.setOriginalSize(pixmap.width(), pixmap.height())
         # Update filename label
-        filename = os.path.basename(self.image_list[self.current_index])
+        filename = os.path.basename(self.image_list[index])
         self.filename_label.setText(self.dataset_name + ' - ' + filename)
         # signal main GUI to update the label list widget
         if self.masks_outlines:
-          self.currentSeg.emit(self.masks_outlines[self.current_index])
+          self.currentSeg.emit(self.masks_outlines[index])
     else:
       self.filename_label.setText("No image loaded")
 
@@ -236,10 +238,15 @@ class ImageViewerWidget(QWidget):
 
     self.current_index = 0
     self.rebuildView()
-    self.updateImage(self.current_index)
+    self.updateImage(0) # this will set self.current_index to 0 again but OK
 
   @Slot(bool)
   def setSegmentationMode(self, enabled: bool):
     # pass-through slot
     self.image_view.setSegmentationMode(enabled)
-    return
+    
+  @Slot(float, float)
+  def onRequestSegmentation(self, x, y):
+    if not self.image_list: # this should not happen as the GUI is guarded to allow clickToSegment after successful dataset loading
+      return
+    self.requestSegmentation.emit(x, y, self.image_list[self.current_index])

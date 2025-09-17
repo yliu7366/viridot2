@@ -189,7 +189,7 @@ class WellImageGraphicsView(QGraphicsView):
         normalized_x = max(0.0, min(normalized_x, 1.0))
         normalized_y = max(0.0, min(normalized_y, 1.0))
 
-        print(f"Normalized click: ({normalized_x:.3f}, {normalized_y:.3f})")
+        #print(f"Normalized click: ({normalized_x:.3f}, {normalized_y:.3f})")
 
         # Emit the new signal with the normalized coordinates
         self.requestSegmentation.emit(normalized_x, normalized_y)

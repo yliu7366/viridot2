@@ -519,7 +519,6 @@ class MainGUI(QWidget):
 
       self.is_worker_running = False
     else:
-      # TODO: batch processing
       total = len(self.datasets)
 
       # save results always
