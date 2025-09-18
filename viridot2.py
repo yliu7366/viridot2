@@ -69,6 +69,8 @@ class MainGUI(QWidget):
     self.worker = None
     self.is_worker_running = False
 
+    self.singleClickSegmentationMode = False # clickToSegment
+
     self.initUI()
     self.initWorker()
 
@@ -102,8 +104,9 @@ class MainGUI(QWidget):
     self.image_view = ImageViewerWidget()
     self.result_emitter.results_ready.connect(self.image_view.updateMasksOutlines)
     self.dataset_emitter.dataset_ready.connect(self.image_view.updateDataset)
-    self.image_view.currentSeg.connect(self.populateSegmentationList)
-    self.image_view.isGridView.connect(self.updateControlsForGridView)
+    self.image_view.notifyCurrentSeg.connect(self.populateSegmentationList)
+    self.image_view.notifyIsGridView.connect(self.updateControlsForGridView)
+    self.image_view.requestSegmentation.connect(self.onClickToSegment)
     self.viewerPanelLayout.addWidget(self.image_view)
 
     # Control Panel (Left)
@@ -407,6 +410,7 @@ class MainGUI(QWidget):
 
     return
   
+  # setup SAM worker to auto-predict a list of images
   def setupWorker(self, image_list):
     paraDict = self.getExtraParameters()
     #print(paraDict)
@@ -428,6 +432,28 @@ class MainGUI(QWidget):
     print('Dataset:', os.path.basename(os.path.dirname(image_list[0])))
     return
   
+  # setup SAM worker to do clickToSegment on ONE image
+  def setupWorkerForSingleClick(self, x, y, name):
+    paraDict = self.getExtraParameters()
+
+    settings = QSettings("IDSS", "Viridot2")
+    cpt_path = settings.value("modelpath", "./sam2_repo/checkpoints")
+    debug_mode = settings.value("debugmode", False, type=bool)
+    fp4 = settings.value("fp4", False, type=bool)
+
+    self.worker.setupParametersForSingleClick(
+      name,
+      x,
+      y,
+      self.sam2_model_keys[self.model_index],
+      cpt_path,
+      paraDict,
+      debug_mode,
+      fp4
+    )
+
+    return
+  
   def setupGUIforComputing(self):
     # enable/disable GUI controls for computing
     self.goButton.setEnabled(False)
@@ -440,6 +466,10 @@ class MainGUI(QWidget):
 
     self.progressLabel.setEnabled(True)
     self.progressLabel.setText("0%")
+    return
+  
+  def startSlurmBatchProcessing(self):
+    # right now do nothing
     return
   
   def startLocalBatchProcessing(self):
@@ -459,10 +489,6 @@ class MainGUI(QWidget):
     self.start_computation.emit()
     return
   
-  def startSlurmBatchProcessing(self):
-    # right now do nothing
-    return
-  
   def onGoButtonClicked(self):
     if not self.image_list:
       return # no data 
@@ -475,6 +501,18 @@ class MainGUI(QWidget):
     self.setupGUIforComputing()
     self.setupWorker(self.image_list)
 
+    self.start_computation.emit()
+    return
+
+  @Slot(float, float, str)
+  def onClickToSegment(self, x, y, name):
+    if self.is_worker_running:
+      return # prevent multiple runs
+    
+    self.is_worker_running = True
+    self.singleClickSegmentationMode = True
+
+    self.setupWorkerForSingleClick(x, y, name)
     self.start_computation.emit()
     return
 
@@ -506,16 +544,25 @@ class MainGUI(QWidget):
   @Slot(list)
   def computationDone(self, results):
     if not self.datasets: # single plate processing
-      self.progressLabel.setEnabled(False)
+      if self.singleClickSegmentationMode:
+        m = results[0]['masks']
+        if m:
+          self.image_view.addSingleClickResult(results)
+        else:
+          QMessageBox.information(self, "Finished", f"Single click segmentation didn't find any object.")
 
-      saveSegmentation(self.image_list, results)
-      savePlaqueCounts(self.image_list, results)
-      
-      self.result_emitter.results_ready.emit(results)
-      
-      # populate the first image segmentations to the label list widget
-      self.populateSegmentationList(results[0])
-      self.setupGUIAfterComputing()
+        self.singleClickSegmentationMode = False
+      else:
+        self.progressLabel.setEnabled(False)
+
+        saveSegmentation(self.image_list, results)
+        savePlaqueCounts(self.image_list, results)
+        
+        self.result_emitter.results_ready.emit(results)
+        
+        # populate the first image segmentations to the label list widget
+        self.populateSegmentationList(results[0])
+        self.setupGUIAfterComputing()
 
       self.is_worker_running = False
     else:

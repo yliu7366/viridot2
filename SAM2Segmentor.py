@@ -29,6 +29,46 @@ class SAM2Worker(QObject):
     self.model_type = None
     self.modelChanged = False
 
+    self.clickToSegment = False
+    self.clickX = 0
+    self.clickY = 0
+    self.clickToSegmentImage = None
+
+  def setupParametersForSingleClick(self, name, x, y, model_type, model_path, para_dict, debug_mode, fp4):
+    self.modelChanged = self.model_type != model_type
+
+    self.clickToSegmentImage = name
+    self.clickX = x
+    self.clickY = y
+    self.clickToSegment = True
+
+    self.model_type = model_type
+    self.model_path = model_path
+    self.debug_mode = debug_mode
+    self.fp4 = fp4
+
+    # TODO: verify the following parameters still needed for clickToSegment
+    # AutoMaskGenerator
+    self.create_masked_point_grids = para_dict["custom_point_grid"]
+
+    self.points_per_side = para_dict["points_per_side"]
+    self.points_per_batch = para_dict["points_per_batch"]
+    self.crop_n_layers = para_dict["crop_n_layers"]
+    self.crop_scale_factor = 2
+    self.circularity_threshold = para_dict["circularity_thresh"]
+    self.min_label_size = para_dict["min_label_size"]
+    self.pred_iou_thresh = para_dict["pred_iou_thhresh"]
+    self.stability_score_thresh = para_dict["stability_score_thresh"]
+    self.stability_score_offset = para_dict["stability_score_offset"]
+    self.box_nms_thresh = para_dict["box_nms_thresh"]
+
+    # other parameters
+    self.blue_channel_threshold_factor = para_dict["blue_channel_thresh_factor"]
+    self.largest_label_size = para_dict["largest_label_size"]
+
+    # SAM2 model can't be created here because this function is called from the main thread
+    # creating SAM2 model here will have context corruption problem in HPC environments
+
   def setupParameters(self, image_names, model_type, model_path, para_dict, debug_mode, fp4):
     self.modelChanged = self.model_type != model_type
 
@@ -61,6 +101,7 @@ class SAM2Worker(QObject):
 
   def initializeModel(self):
     try:
+      print(f"Creating SAM2 model...", flush=True)
       tStart = time.time()
       self.createSAM2Segmentor(self.model_type, self.model_path)
       tEnd = time.time()
@@ -72,27 +113,39 @@ class SAM2Worker(QObject):
     if not self.sam2 or self.modelChanged:
       self.initializeModel()
 
-    print("Starting plaque segmentation", flush=True)
-
     masks_outlines = []
-    total = len(self.image_names)
-    for i, name in enumerate(self.image_names):
-      tStart = time.time()
-      # m, o = self.segmentor.segmentOneImage(name)
-      m, o = self.segmentOneImageAuto(name)
-      tEnd = time.time()
 
-      print(os.path.basename(name), "{:.2f}".format(tEnd-tStart), 'seconds')
-
-      progress = int(((i+1)/total)*100)
-      self.progress.emit(progress)
+    if self.clickToSegment:
+      print('clickToSegment started', self.clickX, self.clickY, self.clickToSegmentImage, flush=True)
+      m, o = self.singleClickSegmentation(self.clickToSegmentImage, self.clickX, self.clickY)
 
       masks_outlines_dict = {}
       masks_outlines_dict['masks'] = m
       masks_outlines_dict['outlines'] = o
-      masks_outlines.append(masks_outlines_dict)
+      masks_outlines.append(masks_outlines_dict) # single click result validation done in the parent class
 
-    print("Plaque segmentation done", flush=True)
+      print('clickToSegment finished', flush=True)
+    else:
+      print("Starting plaque segmentation", flush=True)
+      
+      total = len(self.image_names)
+      for i, name in enumerate(self.image_names):
+        tStart = time.time()
+        # m, o = self.segmentor.segmentOneImage(name)
+        m, o = self.segmentOneImageAuto(name)
+        tEnd = time.time()
+
+        print(os.path.basename(name), "{:.2f}".format(tEnd-tStart), 'seconds')
+
+        progress = int(((i+1)/total)*100)
+        self.progress.emit(progress)
+
+        masks_outlines_dict = {}
+        masks_outlines_dict['masks'] = m
+        masks_outlines_dict['outlines'] = o
+        masks_outlines.append(masks_outlines_dict)
+
+      print("Plaque segmentation done", flush=True)
 
     self.finished.emit(masks_outlines)
     return
@@ -306,6 +359,89 @@ class SAM2Worker(QObject):
       outlines.append(contours[0])
     return outlines
 
+  def mask2Annotation(self,
+                      mask: np.ndarray, 
+                      predicted_iou: float, 
+                      point_prompt: np.ndarray) -> dict | None:
+    """
+    Constructs a SAM-style annotation dictionary from a single segmentation mask.
+
+    Args:
+        mask (np.ndarray): A 2D boolean numpy array representing the segmentation mask.
+        predicted_iou (float): The IoU score predicted by the model for this mask.
+        point_prompt (np.ndarray): The [x, y] coordinates of the point prompt used.
+
+    Returns:
+        dict | None: An annotation dictionary, or None if the mask is empty.
+    """
+    # 1. Calculate the area
+    area = np.sum(mask)
+    if area == 0:
+        return None  # Return None for empty masks
+
+    # 2. Calculate the bounding box [x, y, w, h]
+    # Find the indices of the non-zero elements (the mask)
+    rows = np.any(mask, axis=1)
+    cols = np.any(mask, axis=0)
+    
+    y_min, y_max = np.where(rows)[0][[0, -1]]
+    x_min, x_max = np.where(cols)[0][[0, -1]]
+    
+    bbox = [int(x_min), int(y_min), int(x_max - x_min + 1), int(y_max - y_min + 1)]
+
+    # 3. Assemble the annotation dictionary
+    annotation = {
+        'segmentation': mask,
+        'area': int(area),
+        'bbox': bbox,
+        'predicted_iou': predicted_iou,
+        
+        # --- Add placeholder/known values for other common keys ---
+        
+        # The stability score is not calculated by the single-point predictor,
+        # so we can use a placeholder like 0.0 or None.
+        'stability_score': 0.0, 
+        
+        # Store the point that generated this mask
+        'point_coords': [point_prompt.tolist()],
+        
+        # The crop box for a single prediction is the whole image
+        'crop_box': [0, 0, mask.shape[1], mask.shape[0]] 
+    }
+
+    return annotation
+
+  def singleClickSegmentation(self, name, x, y):
+    image = Image.open(name)
+    image = image.convert("RGB")
+
+    self.predictor.set_image(image)
+
+    w, h = image.size
+
+    points = np.array([[int(x*w), int(y*h)]])
+    labels = np.array([1])
+
+    masks = []
+    m, s, l = self.predictor.predict(
+      point_coords=points,
+      point_labels=labels,
+      multimask_output=False,
+    )
+
+    # m is a (1, H, W) array, so we take the first element
+    single_mask = m[0]
+    # s is a (1,) array, so we take the first element
+    single_iou = s[0]
+    # use points[0] to get the [x, y] part
+    annotation = self.mask2Annotation(single_mask, single_iou, points[0])
+
+    masks.append(annotation)
+
+    outlines = self.annotations2Outlines(masks)
+
+    return masks, outlines
+  
   # create custom point points using each label centriod on the blue channel
   def segmentOneImageByAutoPrompts(self, name):
     image = Image.open(name)

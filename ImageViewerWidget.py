@@ -8,11 +8,12 @@ from PySide6.QtGui import QPixmap, QPainter, QPen
 from PySide6.QtCore import Qt, QSize, QPoint, Signal, Slot
 
 from WellImageGraphicsView import WellImageGraphicsView
+from utils import savePlaqueCounts, saveSegmentation
 
 class ImageViewerWidget(QWidget):
   # Signals
-  currentSeg = Signal(dict) # emit current image's segmentation for MainUI to update the segmentation list
-  isGridView = Signal(bool) # emit GridView status for MainUI to update UI correspondingly
+  notifyCurrentSeg = Signal(dict) # emit current image's segmentation for MainUI to update the segmentation list
+  notifyIsGridView = Signal(bool) # emit GridView status for MainUI to update UI correspondingly
   requestSegmentation = Signal(float, float, str) # emit X, Y and image file name
 
   def __init__(self, dataset=None, image_list=None, masks_outlines=None):
@@ -107,7 +108,7 @@ class ImageViewerWidget(QWidget):
         self.filename_label.setText(self.dataset_name + ' - ' + filename)
         # signal main GUI to update the label list widget
         if self.masks_outlines:
-          self.currentSeg.emit(self.masks_outlines[index])
+          self.notifyCurrentSeg.emit(self.masks_outlines[index])
     else:
       self.filename_label.setText("No image loaded")
 
@@ -199,7 +200,7 @@ class ImageViewerWidget(QWidget):
   def toggleView(self):
     """Switch between list and grid view"""
     self.is_grid_view = not self.is_grid_view
-    self.isGridView.emit(self.is_grid_view)
+    self.notifyIsGridView.emit(self.is_grid_view)
     self.rebuildView()
 
   def resizeEvent(self, event):
@@ -250,3 +251,13 @@ class ImageViewerWidget(QWidget):
     if not self.image_list: # this should not happen as the GUI is guarded to allow clickToSegment after successful dataset loading
       return
     self.requestSegmentation.emit(x, y, self.image_list[self.current_index])
+
+  @Slot(list)
+  def addSingleClickResult(self, masks_outlines):
+    self.masks_outlines[self.current_index]['masks'].extend(masks_outlines[0]['masks'])
+    self.masks_outlines[self.current_index]['outlines'].extend(masks_outlines[0]['outlines'])
+    
+    self.updateImage(self.current_index)
+
+    saveSegmentation(self.image_list, self.masks_outlines)
+    savePlaqueCounts(self.image_list, self.masks_outlines)
