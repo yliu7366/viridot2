@@ -20,7 +20,7 @@ if sys.version_info.major == 3 and sys.version_info.minor < 11:
 
 from PySide6.QtWidgets import (QApplication, QWidget, QPushButton, QFileDialog, QCheckBox,
                                 QComboBox, QLabel, QSpinBox, QDoubleSpinBox, QMessageBox,
-                                QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget)
+                                QVBoxLayout, QHBoxLayout, QGroupBox, QListWidget, QAbstractItemView)
 from PySide6.QtCore import QSize, QSettings, QThread, Slot, QObject, Signal
 
 from ImageViewerWidget import ImageViewerWidget
@@ -126,7 +126,7 @@ class MainGUI(QWidget):
     self.loadDatasetButton.clicked.connect(self.loadDataset)
 
     self.loadSegmentationButton = QPushButton("Load Segmentation", self)
-    self.loadSegmentationButton.clicked.connect(self.loadSegmentation)
+    self.loadSegmentationButton.clicked.connect(self.onLoadSegmentation)
     self.loadSegmentationButton.setEnabled(False) # disabled if no dataset loaded
 
     self.goButton = QPushButton("GO!", self)
@@ -162,6 +162,7 @@ class MainGUI(QWidget):
 
     self.labelListWidget = QListWidget()
     self.labelListWidget.setFixedWidth(self.labelPanelWidgetWidth)
+    self.labelListWidget.setSelectionMode(QAbstractItemView.ExtendedSelection)
 
     labelPanelButtonSize = QSize(self.labelPanelWidgetWidth, 32)
     self.clickToSegment = QCheckBox("Click to Segment")
@@ -169,9 +170,13 @@ class MainGUI(QWidget):
     self.clickToSegment.setFixedSize(labelPanelButtonSize)
     self.clickToSegment.setEnabled(False) # disabled till SAM auto segmentation has done.
     
+    self.deleteSelected = QPushButton("Delete Selected")
+    self.deleteSelected.clicked.connect(self.onDeleteSelectedLabel)
+
+    self.labelPanelLayout.addWidget(self.clickToSegment)
     self.labelPanelLayout.addWidget(self.labelListLabel)
     self.labelPanelLayout.addWidget(self.labelListWidget)
-    self.labelPanelLayout.addWidget(self.clickToSegment)
+    self.labelPanelLayout.addWidget(self.deleteSelected)
 
     self.layout.addLayout(self.controlPanelLayout)
     self.layout.addLayout(self.viewerPanelLayout)
@@ -179,6 +184,44 @@ class MainGUI(QWidget):
 
     self.setLayout(self.layout)
 
+  def onDeleteSelectedLabel(self):
+    items = self.labelListWidget.selectedItems()
+    if not items:
+      return
+    
+    labelIDs = []
+    labelStrs = []
+
+    for item in items:
+      labelStrs.append(item.text())
+      labelStr = item.text().lstrip("#")
+      tokens = labelStr.split(" ")
+      labelIDs.append(int(tokens[0])-1) # covnert 1-based index to python 0-based index
+
+    messageStr = "\n".join(labelStrs)
+
+    # ask for user confirmation
+    msgBox = QMessageBox(self)
+    msgBox.setWindowTitle("Please Confirm")
+    msgBox.setText(messageStr)
+    msgBox.setIcon(QMessageBox.Warning)
+    msgBox.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+    msgBox.setDefaultButton(QMessageBox.StandardButton.No)
+    msgBox.setInformativeText("This action is irreversible and will delete all selected labels.")
+    
+    if msgBox.exec() == QMessageBox.StandardButton.No:
+      return
+    
+    # remove the items from GUI
+    for item in items:
+      row = self.labelListWidget.row(item)
+      self.labelListWidget.takeItem(row)
+
+    # update ImageView
+    self.image_view.deleteLabelbyIDs(labelIDs)
+    
+    return
+  
   def updateControlsForGridView(self, is_grid_view: bool):
     # when showing a grid, disable the click to segment mode
     if is_grid_view:
@@ -634,7 +677,7 @@ class MainGUI(QWidget):
 
     self.labelListWidget.clear()
 
-  def loadSegmentation(self):
+  def onLoadSegmentation(self):
     fileName, _ = QFileDialog.getOpenFileName(self, "Open Segmentation", "", "Pickle Files (*.pkl)")
     if not fileName:
       return
@@ -657,7 +700,7 @@ class MainGUI(QWidget):
       self.clickToSegment.setEnabled(True)
     self.segmentationExists = True
 
-    QMessageBox.information(self, "Success", f"Successfully loaded {len(moList)} segmentation results from\n{fileName}")
+    QMessageBox.information(self, "Success", f"Successfully loaded segmentation results from\n{fileName}\nNumber of images: {len(moList)}")
 
     return
   

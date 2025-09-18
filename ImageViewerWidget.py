@@ -256,8 +256,24 @@ class ImageViewerWidget(QWidget):
   def addSingleClickResult(self, masks_outlines):
     self.masks_outlines[self.current_index]['masks'].extend(masks_outlines[0]['masks'])
     self.masks_outlines[self.current_index]['outlines'].extend(masks_outlines[0]['outlines'])
-    
+
     self.updateImage(self.current_index)
 
     saveSegmentation(self.image_list, self.masks_outlines)
     savePlaqueCounts(self.image_list, self.masks_outlines)
+
+  @Slot(list)
+  def deleteLabelbyIDs(self, ids):
+    ids_set = set(ids)
+
+    new_masks = [item for i, item in enumerate(self.masks_outlines[self.current_index]['masks']) if i not in ids_set]
+    new_outlines = [item for i, item in enumerate(self.masks_outlines[self.current_index]['outlines']) if i not in ids_set]
+
+    self.masks_outlines[self.current_index]['masks'] = new_masks
+    self.masks_outlines[self.current_index]['outlines'] = new_outlines
+
+    self.updateImage(self.current_index)
+
+    saveSegmentation(self.image_list, self.masks_outlines)
+    savePlaqueCounts(self.image_list, self.masks_outlines)
+    return
